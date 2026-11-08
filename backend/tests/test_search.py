@@ -1,0 +1,89 @@
+import pytest
+
+from filescour import indexer, jobs
+from filescour.search import BadQuery, Filters, search
+
+from .helpers import pdf_with_text, write
+
+
+def build(conn, tmp_path, files):
+    for rel, data in files.items():
+        write(tmp_path / rel, data)
+    rid = indexer.add_root(conn, str(tmp_path))
+    indexer.scan_root(conn, rid)
+    jobs.run(conn)
+
+
+def test_regex_returns_the_first_5_matching_lines_in_order(conn, tmp_path):
+    text = "".join(f"hit {i}\nmiss\n" for i in range(1, 9))
+    build(conn, tmp_path, {"many.txt": text})
+    (hit,) = search(conn, "^hit", "regex").hits
+    assert [(ln.line, ln.text) for ln in hit.lines] == [
+        (1, "hit 1"), (3, "hit 2"), (5, "hit 3"), (7, "hit 4"), (9, "hit 5")]
+
+
+def test_anchors_work_on_every_line(conn, tmp_path):
+    build(conn, tmp_path, {"a.txt": "first\nsecond line\n"})
+    for pattern in (r"^second", r"\Asecond", r"line$", r"line\Z", r"(?i)^SECOND"):
+        (hit,) = search(conn, pattern, "regex").hits
+        assert [ln.line for ln in hit.lines] == [2], pattern
+
+
+def test_long_lines_are_cut_to_300_characters(conn, tmp_path):
+    build(conn, tmp_path, {"long.txt": "x" * 1000 + "\n"})
+    (hit,) = search(conn, "x+", "regex").hits
+    assert hit.lines[0].text == "x" * 300
+
+
+def test_windows_line_endings_are_dropped_from_lines(conn, tmp_path):
+    build(conn, tmp_path, {"crlf.txt": "first\r\nsecond\r\n"})
+    (hit,) = search(conn, "sec", "regex").hits
+    assert [(ln.line, ln.text) for ln in hit.lines] == [(2, "second")]
+
+
+def test_like_wildcards_in_a_name_query_are_literal(conn, tmp_path):
+    build(conn, tmp_path, {"100%_done.txt": "a", "100x_done.txt": "b", "1000done.txt": "c"})
+    assert [h.name for h in search(conn, "%_", "name").hits] == ["100%_done.txt"]
+    assert [h.name for h in search(conn, "x_", "name").hits] == ["100x_done.txt"]
+    # As a LIKE wildcard, "_" would match "0d", "0%" and "0x" in all 3 names.
+    assert search(conn, "0_", "name").hits == []
+
+
+def test_case_sensitive_search(conn, tmp_path):
+    build(conn, tmp_path, {"Report.txt": "Total due\n", "report.md": "total due\n"})
+    assert [h.name for h in search(conn, "Report", "name", ignore_case=False).hits] == ["Report.txt"]
+    assert [h.name for h in search(conn, "Report", "name").hits] == ["Report.txt", "report.md"]
+    assert [h.name for h in search(conn, "^Total", "regex", ignore_case=False).hits] == ["Report.txt"]
+
+
+def test_pdf_text_is_searchable_and_filterable(conn, tmp_path):
+    build(conn, tmp_path, {"inv.pdf": pdf_with_text("Invoice 4417 paid"), "inv.txt": "Invoice 4417"})
+    assert [h.name for h in search(conn, "4417", "words", Filters(source="pdf")).hits] == ["inv.pdf"]
+    assert [h.name for h in search(conn, "4417", "words").hits] == ["inv.pdf", "inv.txt"]
+
+
+def test_words_search_reports_a_snippet(conn, tmp_path):
+    build(conn, tmp_path, {"a.txt": "the quarterly\nreport is late\n"})
+    (hit,) = search(conn, "quarterly report", "words").hits
+    assert hit.lines[0].line is None
+    assert hit.lines[0].text == "the quarterly report is late"
+
+
+@pytest.mark.parametrize("q, mode, msg", [
+    ("(", "regex", "invalid regular expression"),
+    ("", "regex", "regular expression is needed"),
+    ("  ", "words", "at least 1 word"),
+    ("x", "sql", "mode must be"),
+])
+def test_bad_queries(conn, q, mode, msg):
+    with pytest.raises(BadQuery, match=msg):
+        search(conn, q, mode)
+
+
+def test_limit_bounds_and_total(conn, tmp_path):
+    build(conn, tmp_path, {f"f{i}.txt": "x" for i in range(5)})
+    r = search(conn, "", "name", limit=2)
+    assert (r.total, [h.name for h in r.hits]) == (5, ["f0.txt", "f1.txt"])
+    for bad in (0, 1001):
+        with pytest.raises(BadQuery, match="limit"):
+            search(conn, "", "name", limit=bad)
