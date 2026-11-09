@@ -63,6 +63,7 @@ class Hit:
     source: str | None
     cloud: str
     truncated: bool
+    archive: str | None  # the path of the zip that holds this entry, or None
     lines: list[Line] = field(default_factory=list)
 
 
@@ -197,7 +198,8 @@ def search(conn: psycopg.Connection, q: str, mode: str = "name",
             ).fetchone()[0]
             rows = conn.execute(
                 "SELECT f.path, f.name, f.ext, f.size, f.mtime, f.content_source, f.cloud, "
-                f"f.truncated, {lines_sql} FROM files f WHERE {where_sql} "
+                f"f.truncated, z.path, {lines_sql} FROM files f "
+                f"LEFT JOIN files z ON z.id = f.parent_id WHERE {where_sql} "
                 "ORDER BY f.path COLLATE \"C\" LIMIT %s",
                 lines_args + args + [limit],
             ).fetchall()
@@ -205,13 +207,13 @@ def search(conn: psycopg.Connection, q: str, mode: str = "name",
         raise BadQuery(f"invalid regular expression: {exc.diag.message_primary}") from exc
 
     hits = []
-    for path, name, ext, size, mtime, source, state, truncated, lines in rows:
+    for path, name, ext, size, mtime, source, state, truncated, archive, lines in rows:
         if isinstance(lines, str):
             lines = json.loads(lines)
         hits.append(Hit(
             path=path, name=name, ext=ext, size=size,
             modified=mtime.isoformat(), source=source, cloud=state,
-            truncated=truncated,
+            truncated=truncated, archive=archive,
             lines=[_line(x) for x in (lines or [])],
         ))
     return Result(mode, q, ignore_case, filters, total, hits)

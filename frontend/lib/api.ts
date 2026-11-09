@@ -19,6 +19,7 @@ export interface Hit {
   source: string | null;
   cloud: "local" | "online" | "unknown";
   truncated: boolean;
+  archive: string | null; // the zip that holds this entry, or null for a file on the disk
   lines: Line[];
 }
 
@@ -34,6 +35,7 @@ export interface Root {
   files: number;
   online: number;
   unknown: number;
+  zip_entries: number;
 }
 
 export interface JobCounts {

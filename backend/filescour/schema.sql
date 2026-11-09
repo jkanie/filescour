@@ -34,7 +34,16 @@ CREATE TABLE IF NOT EXISTS files (
                    (to_tsvector('simple', left(coalesce(content, ''), 500000))) STORED
 );
 
+-- An entry of a zip file has its own row, with the zip's row as its parent
+-- and a path such as /home/me/backup.zip!/notes/may.txt (see archive.py).
+-- Deleting the zip's row deletes its entries. ADD COLUMN IF NOT EXISTS
+-- brings a database made before this column up to date.
+ALTER TABLE files ADD COLUMN IF NOT EXISTS
+    parent_id bigint REFERENCES files (id) ON DELETE CASCADE;
+
 CREATE INDEX IF NOT EXISTS files_root_idx ON files (root_id);
+CREATE INDEX IF NOT EXISTS files_parent_idx ON files (parent_id)
+    WHERE parent_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS files_cloud_idx ON files (cloud) WHERE cloud <> 'local';
 CREATE INDEX IF NOT EXISTS files_name_trgm ON files USING gin (name gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS files_path_trgm ON files USING gin (path gin_trgm_ops);

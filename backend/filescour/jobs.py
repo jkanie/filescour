@@ -6,7 +6,8 @@ waits on a row that the other has locked.
 
 Just before a worker opens a file, it reads the file's cloud state again
 (without opening it). A file that went online-only after the scan is skipped,
-not read, so the worker never makes a cloud service down-load it.
+not read, so the worker never makes a cloud service down-load it. A zip
+file gets the same check before its entries are listed (see archive.py).
 """
 
 from __future__ import annotations
@@ -15,8 +16,8 @@ from pathlib import Path
 
 import psycopg
 
-from . import cloud
-from .extract import ExtractError, extract
+from . import archive, cloud
+from .extract import ZIP_EXTS, ExtractError, extract
 
 CLAIM_SQL = """
 WITH next AS (
@@ -48,15 +49,18 @@ def _finish(conn, job_id: int, state: str, error: str | None) -> None:
 
 
 def process(conn: psycopg.Connection, job_id: int, file_id: int) -> str:
-    """Extract the text of 1 file. Returns the job's final state."""
+    """Extract the text of 1 file, or the entries of 1 zip file.
+
+    Returns the job's final state.
+    """
     row = conn.execute(
-        "SELECT f.path, f.ext, r.extract_unknown FROM files f "
+        "SELECT f.path, f.ext, f.mtime, r.extract_unknown FROM files f "
         "JOIN roots r ON r.id = f.root_id WHERE f.id = %s", (file_id,)
     ).fetchone()
     if row is None:  # the file row was removed after the job was claimed
         _finish(conn, job_id, "failed", "file row no longer exists")
         return "failed"
-    path, ext, extract_unknown = row
+    path, ext, mtime, extract_unknown = row
     state, attrs = cloud.current_state(path)
     if not cloud.may_read(state, extract_unknown):
         why = ("online only" if state == "online"
@@ -68,6 +72,8 @@ def process(conn: psycopg.Connection, job_id: int, file_id: int) -> str:
             )
             _finish(conn, job_id, "skipped", f"not opened: {why}")
         return "skipped"
+    if ext in ZIP_EXTS:
+        return _expand(conn, job_id, file_id, path, mtime, state, attrs)
     try:
         got = extract(Path(path), ext)
     except (ExtractError, OSError) as exc:
@@ -85,6 +91,27 @@ def process(conn: psycopg.Connection, job_id: int, file_id: int) -> str:
         )
         _finish(conn, job_id, "done", None)
     return "done"
+
+
+def _expand(conn, job_id: int, file_id: int, path: str, mtime, state: str,
+            attrs) -> str:
+    """List the entries of a zip file. Its old entries go in the same step."""
+    try:
+        with conn.transaction():
+            archive.expand(conn, file_id, path, mtime, state)
+            conn.execute(
+                "UPDATE files SET cloud = %s, attrs = %s, indexed_at = now() "
+                "WHERE id = %s", (state, attrs, file_id),
+            )
+            _finish(conn, job_id, "done", None)
+        return "done"
+    except (archive.ArchiveError, OSError) as exc:
+        error = str(exc)
+    with conn.transaction():
+        conn.execute("DELETE FROM files WHERE parent_id = %s", (file_id,))
+        conn.execute("UPDATE files SET indexed_at = now() WHERE id = %s", (file_id,))
+        _finish(conn, job_id, "failed", error)
+    return "failed"
 
 
 def run(conn: psycopg.Connection, limit: int | None = None) -> int:

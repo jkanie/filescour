@@ -33,7 +33,7 @@ def to_json(result: Result) -> str:
             {
                 "path": h.path, "name": h.name, "ext": h.ext, "size": h.size,
                 "modified": h.modified, "source": h.source, "cloud": h.cloud,
-                "truncated": h.truncated,
+                "truncated": h.truncated, "archive": h.archive,
                 "lines": [{"line": ln.line, "text": ln.text} for ln in h.lines],
             }
             for h in result.hits

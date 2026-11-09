@@ -49,6 +49,7 @@ def test_json_export(conn, tmp_path):
         "hits": [{"path": f"{root}/b/notes.txt", "name": "notes.txt", "ext": "txt",
                   "size": 21, "modified": "2024-05-31T16:08:37.123456+00:00",
                   "source": "file", "cloud": "local", "truncated": False,
+                  "archive": None,
                   "lines": [{"line": None, "text": 'He said "4417, paid"'}]}],
     }
 

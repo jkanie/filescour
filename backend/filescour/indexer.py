@@ -8,6 +8,10 @@ since the last scan keeps its row and its text, and no job is queued for it.
 The scan never opens a file. It lists each folder with os.scandir and takes
 every file's details from that listing. Text extraction is queued only for a
 file whose data is on this disk (see cloud.py).
+
+A zip file is queued the same way, and a worker lists its entries as rows of
+their own (see archive.py). The scan never walks into a zip: it keeps the
+entry rows of an unchanged zip, and it deletes those of a changed one.
 """
 
 from __future__ import annotations
@@ -21,7 +25,7 @@ from pathlib import Path
 import psycopg
 
 from . import cloud
-from .extract import wants_content
+from .extract import wants_reading
 
 EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
 
@@ -33,7 +37,7 @@ class ScanResult:
     unchanged: int
     removed: int
     queued: int
-    held: int  # text-type files left unread because their data may be online
+    held: int  # text-type and zip files left unread because their data may be online
 
 
 def mtime_of(st: os.stat_result) -> datetime:
@@ -122,7 +126,7 @@ def scan_root(conn: psycopg.Connection, root_id: int) -> ScanResult:
             path: (fid, size, mtime, state, attrs, indexed_at)
             for fid, path, size, mtime, state, attrs, indexed_at in conn.execute(
                 "SELECT id, path, size, mtime, cloud, attrs, indexed_at "
-                "FROM files WHERE root_id = %s",
+                "FROM files WHERE root_id = %s AND parent_id IS NULL",
                 (root_id,),
             )
         }
@@ -131,7 +135,7 @@ def scan_root(conn: psycopg.Connection, root_id: int) -> ScanResult:
             seen.add(path)
             ext = ext_of(name)
             mtime = mtime_of(st)
-            content = wants_content(ext)
+            content = wants_reading(ext)
             state, attrs = cloud.state_of(st, path, drives)
             readable = content and cloud.may_read(state, extract_unknown)
             old = known.get(path)
@@ -143,6 +147,10 @@ def scan_root(conn: psycopg.Connection, root_id: int) -> ScanResult:
                         "UPDATE files SET cloud = %s, attrs = %s WHERE id = %s",
                         (state, attrs, fid),
                     )
+                    # The entries of a zip are where the zip is.
+                    conn.execute(
+                        "UPDATE files SET cloud = %s WHERE parent_id = %s", (state, fid)
+                    )
                 if content and old[5] is None:  # its text was never read
                     if readable:
                         if not _has_open_job(conn, fid):
@@ -152,6 +160,11 @@ def scan_root(conn: psycopg.Connection, root_id: int) -> ScanResult:
                         held += 1
                 continue
             if old is None:
+                if "!/" in path:  # a real file wins over a zip entry's row
+                    conn.execute(
+                        "DELETE FROM files WHERE path = %s AND parent_id IS NOT NULL",
+                        (path,),
+                    )
                 fid = conn.execute(
                     "INSERT INTO files (root_id, path, name, ext, size, mtime, cloud, attrs, "
                     "indexed_at) "
@@ -173,6 +186,8 @@ def scan_root(conn: psycopg.Connection, root_id: int) -> ScanResult:
                 conn.execute(
                     "DELETE FROM jobs WHERE file_id = %s AND state = 'queued'", (fid,)
                 )
+                # A changed zip's old entries go now, before it is read again.
+                conn.execute("DELETE FROM files WHERE parent_id = %s", (fid,))
                 changed += 1
             if readable:
                 _queue(conn, fid)

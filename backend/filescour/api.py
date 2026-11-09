@@ -83,13 +83,16 @@ def health():
 @app.get("/roots")
 def list_roots(conn=Depends(get_conn)):
     rows = conn.execute(
-        "SELECT r.id, r.path, r.extract_unknown, count(f.id), "
-        "count(f.id) FILTER (WHERE f.cloud = 'online'), "
-        "count(f.id) FILTER (WHERE f.cloud = 'unknown') FROM roots r "
+        "SELECT r.id, r.path, r.extract_unknown, "
+        "count(f.id) FILTER (WHERE f.parent_id IS NULL), "
+        "count(f.id) FILTER (WHERE f.parent_id IS NULL AND f.cloud = 'online'), "
+        "count(f.id) FILTER (WHERE f.parent_id IS NULL AND f.cloud = 'unknown'), "
+        "count(f.id) FILTER (WHERE f.parent_id IS NOT NULL) FROM roots r "
         "LEFT JOIN files f ON f.root_id = r.id GROUP BY r.id ORDER BY r.id"
     ).fetchall()
     return [{"id": i, "path": p, "extract_unknown": x, "files": n,
-             "online": on, "unknown": un} for i, p, x, n, on, un in rows]
+             "online": on, "unknown": un, "zip_entries": z}
+            for i, p, x, n, on, un, z in rows]
 
 
 @app.post("/roots", status_code=201)

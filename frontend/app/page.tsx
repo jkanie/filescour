@@ -10,6 +10,7 @@ import {
 } from "react";
 
 import { api, type FetchCounts, type Hit, type JobCounts, type Root } from "@/lib/api";
+import { baseName, downloadable, zipEntry } from "@/lib/hits";
 import {
   type Cloud,
   emptyForm,
@@ -156,14 +157,15 @@ function Folders({
             <li key={r.id}>
               <span className="path">{r.path}</span> ({files(r.files)}
               {r.online > 0 && `, ${r.online} online only`}
-              {r.unknown > 0 && `, ${r.unknown} cloud state not known`}){" "}
+              {r.unknown > 0 && `, ${r.unknown} cloud state not known`}
+              {r.zip_entries > 0 && `, ${r.zip_entries} inside zip files`}){" "}
               <button
                 className="quiet"
                 disabled={busy}
                 onClick={() =>
                   void act(async () => {
                     const s = await api.scan(r.id);
-                    return `Scanned: ${s.added} added, ${s.changed} changed, ${s.removed} removed, ${s.queued} queued for text, ${s.held} not read (online only or cloud state not known).`;
+                    return `Scanned: ${s.added} added, ${s.changed} changed, ${s.removed} removed, ${s.queued} queued to read (text files and zip files), ${s.held} not read (online only or cloud state not known).`;
                   })
                 }
               >
@@ -284,7 +286,7 @@ function OnlineHits({
   onDone: () => void;
   limits: LimitsForm;
 }) {
-  const online = hits.filter((h) => h.cloud === "online");
+  const online = downloadable(hits);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState("");
   const [error, setError] = useState("");
@@ -357,31 +359,35 @@ function Results({ hits, total }: { hits: Hit[]; total: number }) {
             </tr>
           </thead>
           <tbody>
-            {hits.map((h) => (
-              <tr key={h.path}>
-                <td>
-                  <div>{h.name}</div>
-                  <div className="path">{h.path}</div>
-                  {h.lines.length > 0 && (
-                    <ul className="lines">
-                      {h.lines.map((ln, i) => (
-                        <li key={i}>
-                          {ln.line !== null && <b>{ln.line}</b>}
-                          {ln.text}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </td>
-                <td className="num">{formatSize(h.size)}</td>
-                <td className="num">{new Date(h.modified).toLocaleString()}</td>
-                <td>
-                  {h.source ?? "none"}
-                  {h.truncated ? " (cut)" : ""}
-                </td>
-                <td>{CLOUD_LABEL[h.cloud]}</td>
-              </tr>
-            ))}
+            {hits.map((h) => {
+              const inZip = zipEntry(h);
+              return (
+                <tr key={h.path}>
+                  <td>
+                    <div>{h.name}</div>
+                    <div className="path">{h.path}</div>
+                    {inZip && <div className="muted">Inside {baseName(inZip.zip)}</div>}
+                    {h.lines.length > 0 && (
+                      <ul className="lines">
+                        {h.lines.map((ln, i) => (
+                          <li key={i}>
+                            {ln.line !== null && <b>{ln.line}</b>}
+                            {ln.text}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </td>
+                  <td className="num">{formatSize(h.size)}</td>
+                  <td className="num">{new Date(h.modified).toLocaleString()}</td>
+                  <td>
+                    {h.source ?? "none"}
+                    {h.truncated ? " (cut)" : ""}
+                  </td>
+                  <td>{CLOUD_LABEL[h.cloud]}</td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

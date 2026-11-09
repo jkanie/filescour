@@ -156,8 +156,9 @@ def request(conn: psycopg.Connection, paths: list[str], mode: str) -> Requested:
     queued = size = not_online = no_text = 0
     with conn.transaction():
         for fid, path, ext, fsize, state in conn.execute(
+            # A zip entry is not a file on the disk, and is never down-loaded.
             "SELECT id, path, ext, size, cloud FROM files WHERE path = ANY(%s) "
-            "ORDER BY path", (list(paths),)
+            "AND parent_id IS NULL ORDER BY path", (list(paths),)
         ).fetchall():
             if not wants_content(ext):
                 no_text += 1

@@ -2,10 +2,12 @@
 
 Plain-text files are read as UTF-8. PDFs give the text of their text layer.
 Anything else keeps its name, path, size and date in the index, but no content.
+A zip file has no text of its own: its entries become rows (see archive.py).
 """
 
 from __future__ import annotations
 
+import io
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -26,6 +28,9 @@ TEXT_EXTS = frozenset(
 
 PDF_EXTS = frozenset({"pdf"})
 
+# A worker opens these to list their entries (see archive.py).
+ZIP_EXTS = frozenset({"zip"})
+
 
 class ExtractError(Exception):
     """The file was read, but it holds no text that can be indexed."""
@@ -42,6 +47,11 @@ def wants_content(ext: str) -> bool:
     return ext in TEXT_EXTS or ext in PDF_EXTS
 
 
+def wants_reading(ext: str) -> bool:
+    """Whether a worker opens the file: for its text, or for its zip entries."""
+    return wants_content(ext) or ext in ZIP_EXTS
+
+
 def _clip(text: str) -> tuple[str, bool]:
     # PostgreSQL text cannot hold NUL characters.
     text = text.replace("\x00", "")
@@ -50,8 +60,7 @@ def _clip(text: str) -> tuple[str, bool]:
     return text, False
 
 
-def _read_text(path: Path) -> str:
-    data = path.read_bytes()
+def _decode_text(data: bytes) -> str:
     if b"\x00" in data[:8192] and not data.startswith((b"\xff\xfe", b"\xfe\xff")):
         raise ExtractError("binary data in a text-type file")
     for bom, codec in ((b"\xef\xbb\xbf", "utf-8-sig"),
@@ -64,9 +73,9 @@ def _read_text(path: Path) -> str:
         raise ExtractError("not UTF-8 text") from exc
 
 
-def _read_pdf(path: Path) -> str:
+def _read_pdf(source: Path | io.BytesIO) -> str:
     try:
-        reader = PdfReader(path)
+        reader = PdfReader(source)
         pages = [page.extract_text() or "" for page in reader.pages]
     except Exception as exc:  # pypdf raises many types for broken files
         raise ExtractError(f"unreadable PDF: {exc}") from exc
@@ -81,6 +90,17 @@ def extract(path: Path, ext: str) -> Extracted:
         text, cut = _clip(_read_pdf(path))
         return Extracted(text, "pdf", cut)
     if ext in TEXT_EXTS:
-        text, cut = _clip(_read_text(path))
+        text, cut = _clip(_decode_text(path.read_bytes()))
+        return Extracted(text, "file", cut)
+    raise ExtractError(f"no text reader for .{ext}")
+
+
+def extract_bytes(data: bytes, ext: str) -> Extracted:
+    """The same as extract(), for data already in memory (a zip entry)."""
+    if ext in PDF_EXTS:
+        text, cut = _clip(_read_pdf(io.BytesIO(data)))
+        return Extracted(text, "pdf", cut)
+    if ext in TEXT_EXTS:
+        text, cut = _clip(_decode_text(data))
         return Extracted(text, "file", cut)
     raise ExtractError(f"no text reader for .{ext}")

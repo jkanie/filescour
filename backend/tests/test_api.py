@@ -21,7 +21,8 @@ def test_end_to_end(conn, tmp_path):
         assert c.post("/jobs/run").json()["done"] == 1
         assert c.get("/roots").json() == [{"id": rid, "path": str(tmp_path),
                                            "extract_unknown": False, "files": 2,
-                                           "online": 0, "unknown": 0}]
+                                           "online": 0, "unknown": 0,
+                                           "zip_entries": 0}]
 
         body = c.get("/search", params={"q": "^ship", "mode": "regex"}).json()
         assert body["search"]["total"] == 1

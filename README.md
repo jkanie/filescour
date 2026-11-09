@@ -11,6 +11,7 @@ An example: search the text for `4417` and get every file, in all the folders yo
 - Never opens a file whose data is online only, such as a OneDrive or Dropbox file that is not on this device. Opening one would make the cloud service down-load it. See [Online-only files](#online-only-files).
 - Reads online-only files on request: it down-loads each one, reads its text, then sets it back to online only, or keeps it on this device if you ask. A journal row records each file's earlier state before anything changes it, so after a crash or a restart, the next run still puts every file back. See [Reading online-only files](#reading-online-only-files). Windows only.
 - Reads the text of plain-text files (UTF-8, with or without a byte order mark, or UTF-16 with one) and the text layer of PDFs. Other files stay searchable by name, path, size, date.
+- Indexes the entries of `.zip` files as rows of their own, with paths such as `backup.zip!/notes/may.txt`, and reads their text the same way. See [Zip files](#zip-files).
 - Re-scans quickly. A file whose size and modified time have not changed keeps its row and its text, and no job is queued for it.
 - Searches in 4 modes:
   - File name: a plain substring, where `%` and `_` are ordinary characters.
@@ -27,7 +28,7 @@ Anyone with a lot of files on their own drives who needs to find a document by w
 
 ## Built with
 
-- Back-end: Python and FastAPI. Built and tested with Python 3.13.18, FastAPI 0.115.12, psycopg 3.2.9, pypdf 5.6.0. The package needs Python 3.11 or later.
+- Back-end: Python and FastAPI. Built and tested with Python 3.13.18, FastAPI 0.115.12, psycopg 3.2.9, pypdf 5.6.0. Zip files are read with `zipfile` from Python's standard library. The package needs Python 3.11 or later.
 - Database: PostgreSQL with the `pg_trgm` extension. Built and tested with PostgreSQL 16.15. The schema uses generated columns, which need PostgreSQL 12 or later.
 - Front-end: Next.js 16.4.3 with React 19.2.9 and TypeScript 5.9.3, built and tested with Node.js 22.23.4.
 - Tests: pytest 8.4.0 with Hypothesis 6.135.0 for the back-end, and Vitest 3.2.4 for the front-end.
@@ -91,9 +92,9 @@ export FILESCOUR_TEST_DATABASE_URL=postgresql://localhost/filescour_test
 pytest
 ```
 
-The main test checks every search against a plain scan of the same files. It builds a seeded random tree of 70 files, then Hypothesis draws up to 300 cases (a mode, a query, any mix of filters), and each search must return exactly the files and lines that a slow, obvious Python scan returns. Other tests cover the exact bounds of every filter, the export bytes, re-scans after changes, 4 workers draining 300 jobs at once. The online-only tests stand in for the Windows attributes, since Linux has none: they set each file's attributes, then check that no online-only file is ever opened, that a file is read once it comes down to the disk, that a worker checks again just before it opens a file. The down-load tests stand in for Windows and the sync app in the same way, and they check that the earlier state is saved before the first change, that a crash half-way is undone by the next run, that a file not yet back online keeps its journal row open, the size cap, the free-space floor.
+The main test checks every search against a plain scan of the same files. It builds a seeded random tree of 70 files, then Hypothesis draws up to 300 cases (a mode, a query, any mix of filters), and each search must return exactly the files and lines that a slow, obvious Python scan returns. Other tests cover the exact bounds of every filter, the export bytes, re-scans after changes, 4 workers draining 300 jobs at once. The online-only tests stand in for the Windows attributes, since Linux has none: they set each file's attributes, then check that no online-only file is ever opened, that a file is read once it comes down to the disk, that a worker checks again just before it opens a file. The down-load tests stand in for Windows and the sync app in the same way, and they check that the earlier state is saved before the first change, that a crash half-way is undone by the next run, that a file not yet back online keeps its journal row open, the size cap, the free-space floor. The zip tests build small zips on the fly. They check the entry paths and text, every search mode, both exports, re-scans of a changed zip and of a deleted one, that an online-only zip is never opened, each guard in [Zip files](#zip-files).
 
-The front-end tests cover the form-to-query rules:
+The front-end tests cover the form-to-query rules and how a zip entry is told apart from a file on the disk:
 
 ```sh
 cd frontend
@@ -109,9 +110,34 @@ On every push and pull request, GitHub Actions runs the back-end tests (`pytest`
 - Name and path searches ignore case unless "Ignore case" is off. They match a plain substring, with no wildcards.
 - A regular expression matches line by line. A file is a hit when at least 1 of its lines matches, and `^`, `$`, `\A`, `\Z` match at the start and end of each line. The syntax is PostgreSQL's ([POSIX regular expressions](https://www.postgresql.org/docs/current/functions-matching.html#FUNCTIONS-POSIX-REGEXP)).
 - Word search uses PostgreSQL's `simple` text search configuration, with no stemming. It covers characters 1 to 500,000 of each file, which keeps every index entry under PostgreSQL's 1 MB limit. Name, path, regular-expression searches cover all of the stored text.
-- Text is stored up to 10,000,000 characters per file. A longer file is cut there and marked as cut in the results.
+- Text is stored up to 10,000,000 characters per file, and per zip entry. A longer file is cut there and marked as cut in the results.
 - The date filters work in UTC. The API's `modified_after` includes its moment and `modified_before` excludes its moment. On the screen, "Modified to" includes the whole day you pick.
 - Results come in path order, up to 1,000 per search, with the total count of matches.
+
+## Zip files
+
+A `.zip` file goes on the job queue like a text file. A worker opens it and adds a row for each entry, with the entry's name, type, uncompressed size, date. Text files and PDFs inside the zip get their text, read the same way as files on the disk.
+
+- An entry's path is the zip's path, then `!/`, then its path inside the zip: `/home/user/old/backup.zip!/notes/may.txt`.
+- Search by name, by path, by text finds entries the same way as files, and every filter applies to them. A folder filter on the zip's folder includes its entries.
+- The API and the JSON export name the zip that holds each entry in the field `archive` (`null` for a file on the disk). The CSV export lists entries in the same columns as files.
+- Folders inside a zip get no row of their own. Names that start with a dot are skipped, the same as in a scan.
+- The zip itself counts as a cloud file. An online-only zip is never opened, and the worker checks again just before it opens one. Its entries take the zip's cloud state. A request to read online-only files leaves zip files out (they count as files with no text), and it never down-loads a zip entry on its own.
+- A re-scan keeps the entries of an unchanged zip. A changed zip loses its old entries at that scan and goes on the queue again. A deleted zip takes its entries with it.
+- When 2 entries have the same name, the 1st one keeps the row. A real file at the same path as an entry (inside a folder named `backup.zip!`) wins over the entry.
+- When the date in the zip is not a valid date, the entry takes the zip file's own modified time.
+
+The guards against hostile zips, such as zip bombs:
+
+| Case | What happens |
+|---|---|
+| More than 10,000 entries | The zip is not expanded, and its job fails with the reason. |
+| Text files and PDFs inside it add up to more than 256 MB uncompressed | The zip is not expanded, and its job fails with the reason. The sizes are checked before any entry is read. Other entries, such as photos, are never read, and their sizes do not count. |
+| An encrypted entry | It gets a row with its name, size, date, but its data is never read. |
+| An entry that holds more data than its header says | It gets a row, but no text. |
+| A name that could point outside the zip: an absolute path, a drive letter such as `C:`, a `..` or `.` part, an empty part, a backslash | It gets no row. |
+| A zip inside the zip | It gets a row, but its own entries are not indexed. |
+| A file that is not a readable zip | Its job fails with "not a readable zip". The file is still found by name and path. |
 
 ## Online-only files
 
@@ -156,7 +182,7 @@ How a run works:
 | Method | Path | What it does |
 |---|---|---|
 | GET | `/health` | Reports the version. |
-| GET | `/roots` | Lists the folders, with counts of files, online-only files, files whose cloud state is not known. |
+| GET | `/roots` | Lists the folders, with counts of files, online-only files, files whose cloud state is not known, zip entries. |
 | POST | `/roots` | Adds a folder. Body: `{"path": "/home/jon/Documents", "extract_unknown": false}`. |
 | DELETE | `/roots/{id}` | Removes a folder and its rows from the index. The files on disk are not touched. |
 | POST | `/roots/{id}/scan` | Scans a folder and queues text extraction. |
@@ -183,10 +209,12 @@ path,name,ext,size,modified,source,cloud,line,text
 ## Limits today
 
 - The online-only check reads real Windows attributes only when filescour runs on Windows. That code path has not been run yet (the tests here use a stand-in), and the tool has not been tried on a real OneDrive or Dropbox folder.
-- Inside WSL, every file on a Windows drive is `unknown`, and its text is not read unless its folder allows it. Reading the Windows attributes from WSL is item 13 in [ROADMAP.md](ROADMAP.md).
+- Inside WSL, every file on a Windows drive is `unknown`, and its text is not read unless its folder allows it. Reading the Windows attributes from WSL is item 12 in [ROADMAP.md](ROADMAP.md).
 - Reading online-only files runs only on Windows, and it uses the OneDrive commands above. It has not been run on Windows yet (the tests use a stand-in), and it is not known whether Dropbox acts on the same commands.
-- A down-load run happens inside 1 request to the API, which is slow for many files. A background worker is item 4 in [ROADMAP.md](ROADMAP.md).
+- A down-load run happens inside 1 request to the API, which is slow for many files. A background worker is item 3 in [ROADMAP.md](ROADMAP.md).
 - Scanned PDFs and images have no text layer, and only their names, paths, sizes, dates are searchable.
+- Only `.zip` archives are expanded. A zip inside a zip is listed as an entry, but its own entries are not indexed.
+- A zip stores each entry's date and time with no time zone, and filescour reads it as UTC. An entry's date can therefore be off by the time zone offset of the computer that made the zip.
 - It has been built and tested on Linux only.
 
 ## Where it runs
