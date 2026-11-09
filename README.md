@@ -102,6 +102,8 @@ npm run typecheck
 npm run build
 ```
 
+On every push and pull request, GitHub Actions runs the back-end tests (`pytest` against a PostgreSQL 16 service) with Python 3.11 and 3.13. It also runs the front-end checks (`npm test`, `npm run typecheck`, `npm run build`) with Node.js 22 and 24 (see [.github/workflows/ci.yml](.github/workflows/ci.yml)).
+
 ## How search decides
 
 - Name and path searches ignore case unless "Ignore case" is off. They match a plain substring, with no wildcards.
@@ -181,9 +183,9 @@ path,name,ext,size,modified,source,cloud,line,text
 ## Limits today
 
 - The online-only check reads real Windows attributes only when filescour runs on Windows. That code path has not been run yet (the tests here use a stand-in), and the tool has not been tried on a real OneDrive or Dropbox folder.
-- Inside WSL, every file on a Windows drive is `unknown`, and its text is not read unless its folder allows it. Reading the Windows attributes from WSL is item 14 in [ROADMAP.md](ROADMAP.md).
+- Inside WSL, every file on a Windows drive is `unknown`, and its text is not read unless its folder allows it. Reading the Windows attributes from WSL is item 13 in [ROADMAP.md](ROADMAP.md).
 - Reading online-only files runs only on Windows, and it uses the OneDrive commands above. It has not been run on Windows yet (the tests use a stand-in), and it is not known whether Dropbox acts on the same commands.
-- A down-load run happens inside 1 request to the API, which is slow for many files. A background worker is item 5 in [ROADMAP.md](ROADMAP.md).
+- A down-load run happens inside 1 request to the API, which is slow for many files. A background worker is item 4 in [ROADMAP.md](ROADMAP.md).
 - Scanned PDFs and images have no text layer, and only their names, paths, sizes, dates are searchable.
 - It has been built and tested on Linux only.
 
