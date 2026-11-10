@@ -3,7 +3,7 @@ import pytest
 from filescour import indexer, jobs
 from filescour.search import BadQuery, Filters, search
 
-from .helpers import pdf_with_text, write
+from .helpers import docx_bytes, odt_bytes, pdf_with_text, write, zip_bytes
 
 
 def build(conn, tmp_path, files):
@@ -54,6 +54,25 @@ def test_case_sensitive_search(conn, tmp_path):
     assert [h.name for h in search(conn, "Report", "name", ignore_case=False).hits] == ["Report.txt"]
     assert [h.name for h in search(conn, "Report", "name").hits] == ["Report.txt", "report.md"]
     assert [h.name for h in search(conn, "^Total", "regex", ignore_case=False).hits] == ["Report.txt"]
+
+
+def test_word_and_odf_text_is_searchable_and_filterable(conn, tmp_path):
+    build(conn, tmp_path, {
+        "letter.docx": docx_bytes(["Dear Ms Rao,", "Order 4417 ships on Monday."]),
+        "minutes.odt": odt_bytes("<text:p>Order 4417 was discussed.</text:p>"),
+        "order.txt": "Order 4417",
+    })
+    assert [h.name for h in search(conn, "4417", "words", Filters(source="doc")).hits] == ["letter.docx", "minutes.odt"]
+    (hit,) = search(conn, "ships", "regex", Filters(source="doc")).hits
+    assert [(ln.line, ln.text) for ln in hit.lines] == [(2, "Order 4417 ships on Monday.")]
+    assert len(search(conn, "4417", "words").hits) == 3
+
+
+def test_a_word_file_inside_a_zip_gets_its_text(conn, tmp_path):
+    build(conn, tmp_path, {"backup.zip": zip_bytes([("letters/a.docx", docx_bytes(["Receipt 9921 paid"]))])})
+    (hit,) = search(conn, "9921", "words", Filters(source="doc")).hits
+    assert hit.path.endswith("backup.zip!/letters/a.docx")
+    assert hit.source == "doc"
 
 
 def test_pdf_text_is_searchable_and_filterable(conn, tmp_path):

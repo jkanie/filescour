@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS files (
     size           bigint NOT NULL CHECK (size >= 0),
     mtime          timestamptz NOT NULL,
     content        text,
-    content_source text CHECK (content_source IN ('file', 'pdf')),
+    content_source text CHECK (content_source IN ('file', 'pdf', 'doc')),
     truncated      boolean NOT NULL DEFAULT false,
     -- Where the data is: on this disk, online only, or not known (see cloud.py).
     cloud          text NOT NULL DEFAULT 'local'
@@ -40,6 +40,19 @@ CREATE TABLE IF NOT EXISTS files (
 -- brings a database made before this column up to date.
 ALTER TABLE files ADD COLUMN IF NOT EXISTS
     parent_id bigint REFERENCES files (id) ON DELETE CASCADE;
+
+-- 'doc' (Word and OpenDocument text) came after the 1st release. A database
+-- made before it gets the wider check once.
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint
+                   WHERE conname = 'files_content_source_check'
+                     AND pg_get_constraintdef(oid) LIKE '%''doc''%') THEN
+        ALTER TABLE files DROP CONSTRAINT IF EXISTS files_content_source_check;
+        ALTER TABLE files ADD CONSTRAINT files_content_source_check
+            CHECK (content_source IN ('file', 'pdf', 'doc'));
+    END IF;
+END $$;
 
 CREATE INDEX IF NOT EXISTS files_root_idx ON files (root_id);
 CREATE INDEX IF NOT EXISTS files_parent_idx ON files (parent_id)

@@ -59,7 +59,7 @@ def _filters(
     max_size: int | None = Query(default=None, ge=0),
     modified_after: datetime | None = None,
     modified_before: datetime | None = None,
-    source: Literal["file", "pdf", "none"] | None = None,
+    source: Literal["file", "pdf", "doc", "none"] | None = None,
     cloud: Literal["local", "online", "unknown"] | None = None,
 ) -> Filters:
     return Filters(folder=folder or None, exts=norm_exts(ext),

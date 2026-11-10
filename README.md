@@ -10,7 +10,7 @@ An example: search the text for `4417` and get every file, in all the folders yo
 - Records each file's name, path, type, size, modified time, cloud state at once, all from the folder listing, with no file opened. Text extraction is slower, and it runs afterwards from a job queue.
 - Never opens a file whose data is online only, such as a OneDrive or Dropbox file that is not on this device. Opening one would make the cloud service down-load it. See [Online-only files](#online-only-files).
 - Reads online-only files on request: it down-loads each one, reads its text, then sets it back to online only, or keeps it on this device if you ask. A journal row records each file's earlier state before anything changes it, so after a crash or a restart, the next run still puts every file back. See [Reading online-only files](#reading-online-only-files). Windows only.
-- Reads the text of plain-text files (UTF-8, with or without a byte order mark, or UTF-16 with one) and the text layer of PDFs. Other files stay searchable by name, path, size, date.
+- Reads the text of plain-text files (UTF-8, with or without a byte order mark, or UTF-16 with one), the text layer of PDFs, the paragraphs of Word (`.docx`) and OpenDocument (`.odt`) files. Other files stay searchable by name, path, size, date.
 - Indexes the entries of `.zip` files as rows of their own, with paths such as `backup.zip!/notes/may.txt`, and reads their text the same way. See [Zip files](#zip-files).
 - Re-scans quickly. A file whose size and modified time have not changed keeps its row and its text, and no job is queued for it.
 - Searches in 4 modes:
@@ -18,7 +18,7 @@ An example: search the text for `4417` and get every file, in all the folders yo
   - Full path: the same, over the whole path.
   - Text, by regular expression: PostgreSQL's own engine, line by line, like `grep`. Each hit lists up to 5 matching lines from the top of the file, with their line numbers.
   - Text, by words: PostgreSQL full-text search, with a short snippet per hit.
-- Filters by folder (sub-folders included), file type, size range, modified date range, where the text came from (a text file, a PDF, no text at all), where the data is (on this disk, online only, not known). Every filter is 1 condition in the query, which lets them combine freely.
+- Filters by folder (sub-folders included), file type, size range, modified date range, where the text came from (a text file, a PDF, a Word or OpenDocument file, no text at all), where the data is (on this disk, online only, not known). Every filter is 1 condition in the query, which lets them combine freely.
 - Exports the results to CSV or JSON. Both files record the query and filters that produced them.
 - Runs the job queue on PostgreSQL. Workers claim jobs with `FOR UPDATE SKIP LOCKED`. Several can therefore run at once, and no 2 ever take the same job.
 
@@ -114,9 +114,23 @@ On every push and pull request, GitHub Actions runs the back-end tests (`pytest`
 - The date filters work in UTC. The API's `modified_after` includes its moment and `modified_before` excludes its moment. On the screen, "Modified to" includes the whole day you pick.
 - Results come in path order, up to 1,000 per search, with the total count of matches.
 
+## Word and OpenDocument files
+
+A `.docx` or `.odt` file is a zip of XML parts. A worker reads the paragraphs from those parts with the Python standard library, 1 line per paragraph, such that a regular expression search can show the matching lines. In a `.docx`, the body comes first, then the headers, footers, footnotes, endnotes. In an `.odt`, headings, list items, notes count as paragraphs, and runs of spaces, tabs, line breaks keep their place. The source filter calls this text `doc`.
+
+| Case | What happens |
+| --- | --- |
+| An XML part over 64 MB uncompressed | The document gets no text. The size is checked before the part is read, and a part that holds more than it declares is cut off at the limit and refused. |
+| A part with a DOCTYPE | Refused before it is parsed. Word and OpenDocument never write one, and it is the only place XML entities can be declared, so entity expansion cannot run. |
+| A broken zip, damaged compressed data, a missing main part, XML that is not well-formed, a document with no text | The document keeps its name, path, size, date in the index without text. |
+
+In each of these cases a document on the disk has its job marked failed, with the reason. A document inside a zip keeps its entry row without text, the same as a broken PDF entry.
+
+A database made before this release gets the wider `content_source` check the next time the schema set-up runs.
+
 ## Zip files
 
-A `.zip` file goes on the job queue like a text file. A worker opens it and adds a row for each entry, with the entry's name, type, uncompressed size, date. Text files and PDFs inside the zip get their text, read the same way as files on the disk.
+A `.zip` file goes on the job queue like a text file. A worker opens it and adds a row for each entry, with the entry's name, type, uncompressed size, date. Text files, PDFs, Word files, OpenDocument files inside the zip get their text, read the same way as files on the disk.
 
 - An entry's path is the zip's path, then `!/`, then its path inside the zip: `/home/user/old/backup.zip!/notes/may.txt`.
 - Search by name, by path, by text finds entries the same way as files, and every filter applies to them. A folder filter on the zip's folder includes its entries.
@@ -132,7 +146,7 @@ The guards against hostile zips, such as zip bombs:
 | Case | What happens |
 |---|---|
 | More than 10,000 entries | The zip is not expanded, and its job fails with the reason. |
-| Text files and PDFs inside it add up to more than 256 MB uncompressed | The zip is not expanded, and its job fails with the reason. The sizes are checked before any entry is read. Other entries, such as photos, are never read, and their sizes do not count. |
+| Text files, PDFs, Word files, OpenDocument files inside it add up to more than 256 MB uncompressed | The zip is not expanded, and its job fails with the reason. The sizes are checked before any entry is read. Other entries, such as photos, are never read, and their sizes do not count. |
 | An encrypted entry | It gets a row with its name, size, date, but its data is never read. |
 | An entry that holds more data than its header says | It gets a row, but no text. |
 | A name that could point outside the zip: an absolute path, a drive letter such as `C:`, a `..` or `.` part, an empty part, a backslash | It gets no row. |
@@ -209,10 +223,11 @@ path,name,ext,size,modified,source,cloud,line,text
 ## Limits today
 
 - The online-only check reads real Windows attributes only when filescour runs on Windows. That code path has not been run yet (the tests here use a stand-in), and the tool has not been tried on a real OneDrive or Dropbox folder.
-- Inside WSL, every file on a Windows drive is `unknown`, and its text is not read unless its folder allows it. Reading the Windows attributes from WSL is item 12 in [ROADMAP.md](ROADMAP.md).
+- Inside WSL, every file on a Windows drive is `unknown`, and its text is not read unless its folder allows it. Reading the Windows attributes from WSL is item 11 in [ROADMAP.md](ROADMAP.md).
 - Reading online-only files runs only on Windows, and it uses the OneDrive commands above. It has not been run on Windows yet (the tests use a stand-in), and it is not known whether Dropbox acts on the same commands.
-- A down-load run happens inside 1 request to the API, which is slow for many files. A background worker is item 3 in [ROADMAP.md](ROADMAP.md).
+- A down-load run happens inside 1 request to the API, which is slow for many files. A background worker is item 2 in [ROADMAP.md](ROADMAP.md).
 - Scanned PDFs and images have no text layer, and only their names, paths, sizes, dates are searchable.
+- The older binary Word format (`.doc`) and the other OpenDocument types (`.ods`, `.odp`) have no text reader yet.
 - Only `.zip` archives are expanded. A zip inside a zip is listed as an entry, but its own entries are not indexed.
 - A zip stores each entry's date and time with no time zone, and filescour reads it as UTC. An entry's date can therefore be off by the time zone offset of the computer that made the zip.
 - It has been built and tested on Linux only.

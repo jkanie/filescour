@@ -84,3 +84,61 @@ def zip_bytes(entries: list[tuple[str, bytes | str]], encrypted: tuple[str, ...]
                 out[pos + 8:pos + 10] = struct.pack("<H", flags)
             pos = out.find(b"PK\x01\x02", pos + 46 + name_len)
     return bytes(out)
+
+
+_W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+
+
+def _docx_part(paragraphs: list[str], root: str = "document") -> str:
+    """WordprocessingML paragraphs. A tab in the text becomes <w:tab/>, a new
+    line <w:br/>, and every 2nd word goes in a run of its own, as Word often splits them."""
+    body = []
+    for para in paragraphs:
+        runs = []
+        for line_no, line in enumerate(para.split("\n")):
+            if line_no:
+                runs.append("<w:r><w:br/></w:r>")
+            for tab_no, chunk in enumerate(line.split("\t")):
+                if tab_no:
+                    runs.append("<w:r><w:tab/></w:r>")
+                words = chunk.split(" ")
+                for i in range(0, len(words), 2):
+                    piece = " ".join(words[i:i + 2]) + (" " if i + 2 < len(words) else "")
+                    runs.append(f'<w:r><w:rPr><w:b/></w:rPr><w:t xml:space="preserve">{xml_escape(piece)}</w:t></w:r>')
+        body.append("<w:p>" + "".join(runs) + "</w:p>")
+    inner = "".join(body)
+    if root == "document":
+        inner = f"<w:body>{inner}<w:sectPr/></w:body>"
+    return f'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:{root} xmlns:w="{_W_NS}">{inner}</w:{root}>'
+
+
+def xml_escape(text: str) -> str:
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def docx_bytes(paragraphs: list[str], header: list[str] | None = None,
+               footnotes: list[str] | None = None, document_xml: str | None = None) -> bytes:
+    """A minimal .docx: content types, the main part, optional header and footnotes."""
+    entries = [
+        ("[Content_Types].xml",
+         '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+         '<Default Extension="xml" ContentType="application/xml"/></Types>'),
+        ("word/document.xml", document_xml if document_xml is not None else _docx_part(paragraphs)),
+    ]
+    if header is not None:
+        entries.append(("word/header1.xml", _docx_part(header, "hdr")))
+    if footnotes is not None:
+        entries.append(("word/footnotes.xml", _docx_part(footnotes, "footnotes")))
+    return zip_bytes(entries)
+
+
+_ODF_NS = ('xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" '
+           'xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0"')
+
+
+def odt_bytes(body_xml: str, content_xml: str | None = None) -> bytes:
+    """A minimal .odt: the mimetype entry 1st, then content.xml around body_xml."""
+    content = content_xml if content_xml is not None else (
+        f'<?xml version="1.0" encoding="UTF-8"?><office:document-content {_ODF_NS}>'
+        f"<office:body><office:text>{body_xml}</office:text></office:body></office:document-content>")
+    return zip_bytes([("mimetype", "application/vnd.oasis.opendocument.text"), ("content.xml", content)])

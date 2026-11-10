@@ -2,7 +2,7 @@
 // Kept free of React, such that it can be tested on its own.
 
 export type Mode = "name" | "path" | "regex" | "words";
-export type Source = "" | "file" | "pdf" | "none";
+export type Source = "" | "file" | "pdf" | "doc" | "none";
 export type Cloud = "" | "local" | "online" | "unknown";
 
 export interface SearchForm {

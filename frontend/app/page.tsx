@@ -35,6 +35,7 @@ const SOURCES: { value: Source; label: string }[] = [
   { value: "", label: "Any" },
   { value: "file", label: "Text files" },
   { value: "pdf", label: "PDF text" },
+  { value: "doc", label: "Word and OpenDocument text" },
   { value: "none", label: "No text indexed" },
 ];
 

@@ -16,7 +16,7 @@ import psycopg
 from psycopg import errors
 
 MODES = ("name", "path", "regex", "words")
-SOURCES = ("file", "pdf", "none")
+SOURCES = ("file", "pdf", "doc", "none")
 CLOUDS = ("local", "online", "unknown")
 MAX_LIMIT = 1000
 LINES_PER_HIT = 5
