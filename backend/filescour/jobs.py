@@ -8,10 +8,16 @@ Just before a worker opens a file, it reads the file's cloud state again
 (without opening it). A file that went online-only after the scan is skipped,
 not read, so the worker never makes a cloud service down-load it. A zip
 file gets the same check before its entries are listed (see archive.py).
+
+A worker that dies mid-job leaves its job in 'running'. Each run of the queue
+first puts every job that has been running for longer than STUCK_AFTER back in
+the queue, with the reason kept in its error column. A job that has already
+been claimed MAX_ATTEMPTS times fails for good instead.
 """
 
 from __future__ import annotations
 
+from datetime import timedelta
 from pathlib import Path
 
 import psycopg
@@ -32,6 +38,40 @@ FROM next
 WHERE jobs.id = next.id
 RETURNING jobs.id, jobs.file_id
 """
+
+
+STUCK_AFTER = timedelta(minutes=30)
+MAX_ATTEMPTS = 3
+
+REQUEUE_SQL = """
+UPDATE jobs SET
+    state = CASE WHEN attempts >= %(max)s::integer THEN 'failed' ELSE 'queued' END,
+    error = CASE WHEN attempts >= %(max)s::integer
+        THEN format('gave up after %%s attempts: running for more than %%s minutes each time',
+                    attempts, %(minutes)s::text)
+        ELSE format('re-queued after attempt %%s: running for more than %%s minutes',
+                    attempts, %(minutes)s::text)
+    END,
+    updated_at = now()
+WHERE state = 'running' AND updated_at < now() - %(after)s::interval
+RETURNING state
+"""
+
+
+def requeue_stuck(conn: psycopg.Connection,
+                  after: timedelta = STUCK_AFTER) -> tuple[int, int]:
+    """Put jobs left in 'running' for longer than `after` back in the queue.
+
+    A job claimed MAX_ATTEMPTS times already is failed instead. Returns
+    (re-queued, failed).
+    """
+    minutes = after.total_seconds() / 60
+    with conn.transaction():
+        rows = conn.execute(REQUEUE_SQL, {
+            "max": MAX_ATTEMPTS, "after": after, "minutes": f"{minutes:g}",
+        }).fetchall()
+    failed = sum(1 for (state,) in rows if state == "failed")
+    return len(rows) - failed, failed
 
 
 def claim(conn: psycopg.Connection) -> tuple[int, int] | None:
@@ -114,8 +154,13 @@ def _expand(conn, job_id: int, file_id: int, path: str, mtime, state: str,
     return "failed"
 
 
-def run(conn: psycopg.Connection, limit: int | None = None) -> int:
-    """Work through queued jobs until none is left (or limit is reached)."""
+def run(conn: psycopg.Connection, limit: int | None = None,
+        stuck_after: timedelta = STUCK_AFTER) -> int:
+    """Work through queued jobs until none is left (or limit is reached).
+
+    Stuck jobs go back in the queue first (see requeue_stuck).
+    """
+    requeue_stuck(conn, stuck_after)
     count = 0
     while limit is None or count < limit:
         job = claim(conn)

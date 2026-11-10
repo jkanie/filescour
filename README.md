@@ -21,6 +21,7 @@ An example: search the text for `4417` and get every file, in all the folders yo
 - Filters by folder (sub-folders included), file type, size range, modified date range, where the text came from (a text file, a PDF, a Word or OpenDocument file, no text at all), where the data is (on this disk, online only, not known). Every filter is 1 condition in the query, which lets them combine freely.
 - Exports the results to CSV or JSON. Both files record the query and filters that produced them.
 - Runs the job queue on PostgreSQL. Workers claim jobs with `FOR UPDATE SKIP LOCKED`. Several can therefore run at once, and no 2 ever take the same job.
+- Puts a job back in the queue when its worker died: each run of the queue (`work`, `POST /jobs/run`) first re-queues every job that has been `running` for more than 30 minutes, with the reason in its error column. A job claimed 3 times fails for good, with "gave up after 3 attempts" as its reason.
 
 ## Who it is for
 
@@ -223,9 +224,9 @@ path,name,ext,size,modified,source,cloud,line,text
 ## Limits today
 
 - The online-only check reads real Windows attributes only when filescour runs on Windows. That code path has not been run yet (the tests here use a stand-in), and the tool has not been tried on a real OneDrive or Dropbox folder.
-- Inside WSL, every file on a Windows drive is `unknown`, and its text is not read unless its folder allows it. Reading the Windows attributes from WSL is item 11 in [ROADMAP.md](ROADMAP.md).
+- Inside WSL, every file on a Windows drive is `unknown`, and its text is not read unless its folder allows it. Reading the Windows attributes from WSL is item 10 in [ROADMAP.md](ROADMAP.md).
 - Reading online-only files runs only on Windows, and it uses the OneDrive commands above. It has not been run on Windows yet (the tests use a stand-in), and it is not known whether Dropbox acts on the same commands.
-- A down-load run happens inside 1 request to the API, which is slow for many files. A background worker is item 2 in [ROADMAP.md](ROADMAP.md).
+- A down-load run happens inside 1 request to the API, which is slow for many files. A background worker is item 1 in [ROADMAP.md](ROADMAP.md).
 - Scanned PDFs and images have no text layer, and only their names, paths, sizes, dates are searchable.
 - The older binary Word format (`.doc`) and the other OpenDocument types (`.ods`, `.odp`) have no text reader yet.
 - Only `.zip` archives are expanded. A zip inside a zip is listed as an entry, but its own entries are not indexed.
