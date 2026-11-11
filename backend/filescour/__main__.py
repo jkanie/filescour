@@ -62,9 +62,12 @@ def main(argv: list[str]) -> int:
                       f"{r.unchanged} unchanged, {r.removed} removed, {r.queued} queued, "
                       f"{r.held} not read (online only or cloud state not known)")
         elif cmd == "work" and not rest:
-            n = jobs.run(conn)
+            r = jobs.run_counts(conn)
             s = jobs.summary(conn)
-            print(f"{n} jobs run, {s['done']} done, {s['failed']} failed, "
+            if r["requeued"] or r["gave_up"]:
+                print(f"{r['requeued']} stuck jobs re-queued, "
+                      f"{r['gave_up']} given up after {jobs.MAX_ATTEMPTS} attempts")
+            print(f"{r['processed']} jobs run, {s['done']} done, {s['failed']} failed, "
                   f"{s['skipped']} skipped in total")
         elif cmd == "fetch" and [a for a in rest if a != "--keep"]:
             mode = "keep" if "--keep" in rest else "temporary"

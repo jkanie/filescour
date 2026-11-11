@@ -119,3 +119,31 @@ def test_time_out_can_be_set(conn, tmp_path):
         (1, "queued", "re-queued after attempt 1: running for more than 5 minutes"),
         (2, "running", None),
     ]
+
+
+def test_run_counts_report_the_re_queue(conn, tmp_path):
+    write(tmp_path / "a.txt", "alpha")
+    write(tmp_path / "b.txt", "beta")
+    rid = indexer.add_root(conn, str(tmp_path))
+    indexer.scan_root(conn, rid)
+    conn.execute("UPDATE jobs SET state = 'running', attempts = 1, "
+                 "updated_at = now() - interval '31 minutes' WHERE id = 1")
+    conn.execute("UPDATE jobs SET state = 'running', attempts = 3, "
+                 "updated_at = now() - interval '31 minutes' WHERE id = 2")
+    assert jobs.run_counts(conn) == {"processed": 1, "requeued": 1, "gave_up": 1}
+    assert jobs.run_counts(conn) == {"processed": 0, "requeued": 0, "gave_up": 0}
+
+
+def test_work_command_prints_the_re_queue(conn, tmp_path, capsys):
+    from filescour.__main__ import main
+
+    write(tmp_path / "a.txt", "alpha")
+    rid = indexer.add_root(conn, str(tmp_path))
+    indexer.scan_root(conn, rid)
+    assert main(["work"]) == 0
+    assert capsys.readouterr().out == "1 jobs run, 1 done, 0 failed, 0 skipped in total\n"
+    _stick(conn, minutes=31, attempts=1)
+    assert main(["work"]) == 0
+    assert capsys.readouterr().out == (
+        "1 stuck jobs re-queued, 0 given up after 3 attempts\n"
+        "1 jobs run, 1 done, 0 failed, 0 skipped in total\n")

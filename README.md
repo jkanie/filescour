@@ -21,7 +21,7 @@ An example: search the text for `4417` and get every file, in all the folders yo
 - Filters by folder (sub-folders included), file type, size range, modified date range, where the text came from (a text file, a PDF, a Word or OpenDocument file, no text at all), where the data is (on this disk, online only, not known). Every filter is 1 condition in the query, which lets them combine freely.
 - Exports the results to CSV or JSON. Both files record the query and filters that produced them.
 - Runs the job queue on PostgreSQL. Workers claim jobs with `FOR UPDATE SKIP LOCKED`. Several can therefore run at once, and no 2 ever take the same job.
-- Puts a job back in the queue when its worker died: each run of the queue (`work`, `POST /jobs/run`) first re-queues every job that has been `running` for more than 30 minutes, with the reason in its error column. A job claimed 3 times fails for good, with "gave up after 3 attempts" as its reason.
+- Puts a job back in the queue when its worker died: each run of the queue (`work`, `POST /jobs/run`) 1st re-queues every job that has been `running` for more than 30 minutes, with the reason in its error column. A job claimed 3 times fails for good, with "gave up after 3 attempts" as its reason. `work` prints both counts when either is above 0, and `POST /jobs/run` answers with `requeued` and `gave_up` beside `processed`.
 
 ## Who it is for
 

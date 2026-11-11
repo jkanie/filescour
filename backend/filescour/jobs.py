@@ -158,9 +158,21 @@ def run(conn: psycopg.Connection, limit: int | None = None,
         stuck_after: timedelta = STUCK_AFTER) -> int:
     """Work through queued jobs until none is left (or limit is reached).
 
-    Stuck jobs go back in the queue first (see requeue_stuck).
+    Stuck jobs go back in the queue first (see requeue_stuck). Returns the
+    count of jobs run.
     """
-    requeue_stuck(conn, stuck_after)
+    return run_counts(conn, limit, stuck_after)["processed"]
+
+
+def run_counts(conn: psycopg.Connection, limit: int | None = None,
+               stuck_after: timedelta = STUCK_AFTER) -> dict[str, int]:
+    """Like run, but also says how many stuck jobs went back in the queue
+    (requeued) and how many failed for good after MAX_ATTEMPTS (gave_up)."""
+    requeued, gave_up = requeue_stuck(conn, stuck_after)
+    return {"processed": _work(conn, limit), "requeued": requeued, "gave_up": gave_up}
+
+
+def _work(conn: psycopg.Connection, limit: int | None) -> int:
     count = 0
     while limit is None or count < limit:
         job = claim(conn)

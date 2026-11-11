@@ -18,7 +18,8 @@ def test_end_to_end(conn, tmp_path):
         assert root.status_code == 201
         rid = root.json()["id"]
         assert c.post(f"/roots/{rid}/scan").json()["queued"] == 1
-        assert c.post("/jobs/run").json()["done"] == 1
+        ran = c.post("/jobs/run").json()
+        assert (ran["processed"], ran["requeued"], ran["gave_up"], ran["done"]) == (1, 0, 0, 1)
         assert c.get("/roots").json() == [{"id": rid, "path": str(tmp_path),
                                            "extract_unknown": False, "files": 2,
                                            "online": 0, "unknown": 0,

@@ -125,7 +125,7 @@ def job_summary(conn=Depends(get_conn)):
 
 @app.post("/jobs/run")
 def run_jobs(limit: int = Query(default=100, ge=1, le=10_000), conn=Depends(get_conn)):
-    return {"processed": jobs.run(conn, limit), **jobs.summary(conn)}
+    return {**jobs.run_counts(conn, limit), **jobs.summary(conn)}
 
 
 @app.get("/fetch")
