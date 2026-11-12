@@ -54,6 +54,7 @@ def test_end_to_end(conn, tmp_path):
         assert exp.text.splitlines()[1] == "path,name,ext,size,modified,source,cloud,line,text"
 
         assert c.delete(f"/roots/{rid}").status_code == 204
+        assert c.delete(f"/roots/{rid}").status_code == 404
         assert c.get("/search").json()["hits"] == []
 
 
@@ -67,3 +68,4 @@ def test_bad_input_is_refused(conn, tmp_path):
         assert c.get("/search", params={"min_size": -1}).status_code == 422
         assert c.post("/roots", json={"path": str(tmp_path / "missing")}).status_code == 422
         assert c.post("/roots/999/scan").status_code == 404
+        assert c.delete("/roots/999").json() == {"detail": "no folder with id 999"}

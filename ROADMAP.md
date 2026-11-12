@@ -1,6 +1,6 @@
 # Roadmap
 
-Planned work after the seed, with an hour estimate per item. The total is 29.5 hours.
+Planned work after the seed, with an hour estimate per item. The total is 31.5 hours.
 
 ## 1. Background worker with progress, 2 hours
 
@@ -67,6 +67,11 @@ Planned work after the seed, with an hour estimate per item. The total is 29.5 h
 - What: a change log, a tag, a Docker Compose file that starts PostgreSQL, the API, the screen together.
 - Why: the set-up takes 3 programs today, and 1 command lowers the bar for trying it.
 
+## 14. Duplicate files by content hash, 2 hours
+
+- What: a Duplicates view and `GET /duplicates` that group indexed files by a content hash, largest groups 1st, reading only files that share a size with another file.
+- Why: a big drive often holds the same photo or document in several folders. A search tool that already has the index can show the copies and the space they take.
+
 ## Total
 
-29.5 hours.
+31.5 hours.

@@ -109,7 +109,9 @@ def create_root(body: RootIn, conn=Depends(get_conn)):
 
 @app.delete("/roots/{root_id}", status_code=204)
 def delete_root(root_id: int, conn=Depends(get_conn)):
-    conn.execute("DELETE FROM roots WHERE id = %s", (root_id,))
+    gone = conn.execute("DELETE FROM roots WHERE id = %s", (root_id,)).rowcount
+    if not gone:
+        raise HTTPException(status_code=404, detail=f"no folder with id {root_id}")
 
 
 @app.post("/roots/{root_id}/scan")
