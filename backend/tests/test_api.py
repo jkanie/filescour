@@ -32,6 +32,13 @@ def test_end_to_end(conn, tmp_path):
         body = c.get("/search", params={"q": "", "ext": ["jpg", ".MD"]}).json()
         assert [h["name"] for h in body["hits"]] == ["plan.md", "scan.jpg"]
 
+        body = c.get("/search", params={"q": "", "sort": "-name"}).json()
+        assert [h["name"] for h in body["hits"]] == ["scan.jpg", "plan.md"]
+        assert body["search"]["sort"] == "-name"
+        exp = c.get("/export", params={"format": "json", "sort": "-name"}).json()
+        assert [h["name"] for h in exp["hits"]] == ["scan.jpg", "plan.md"]
+        assert c.get("/search", params={"sort": "mtime"}).status_code == 422
+
         exp = c.get("/export", params={"format": "csv", "q": "budget", "mode": "words"})
         assert exp.status_code == 200
         assert exp.headers["content-type"].startswith("text/csv")

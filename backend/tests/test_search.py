@@ -106,3 +106,34 @@ def test_limit_bounds_and_total(conn, tmp_path):
     for bad in (0, 1001):
         with pytest.raises(BadQuery, match="limit"):
             search(conn, "", "name", limit=bad)
+
+
+def test_sort_by_name_size_modified_either_way(conn, tmp_path):
+    day = 86_400 * 10**9
+    for rel, data, age in [("b/zeta.txt", "1234", 3), ("a/alpha.txt", "12", 1),
+                           ("c/Beta.txt", "1234", 2), ("a/gamma.txt", "123456", 0)]:
+        write(tmp_path / rel, data, mtime_ns=1_700_000_000 * 10**9 - age * day)
+    rid = indexer.add_root(conn, str(tmp_path))
+    indexer.scan_root(conn, rid)
+
+    def order(sort):
+        r = search(conn, "", "name", sort=sort)
+        assert r.sort == sort
+        return [h.path.removeprefix(str(tmp_path) + "/") for h in r.hits]
+
+    by_path = ["a/alpha.txt", "a/gamma.txt", "b/zeta.txt", "c/Beta.txt"]
+    assert order("path") == by_path
+    assert order("-path") == by_path[::-1]
+    # Byte order, as for the path: upper case before lower case.
+    assert order("name") == ["c/Beta.txt", "a/alpha.txt", "a/gamma.txt", "b/zeta.txt"]
+    # zeta.txt and Beta.txt are both 4 bytes, so the path breaks the tie,
+    # A to Z in both directions.
+    assert order("size") == ["a/alpha.txt", "b/zeta.txt", "c/Beta.txt", "a/gamma.txt"]
+    assert order("-size") == ["a/gamma.txt", "b/zeta.txt", "c/Beta.txt", "a/alpha.txt"]
+    assert order("modified") == ["b/zeta.txt", "c/Beta.txt", "a/alpha.txt", "a/gamma.txt"]
+    assert order("-modified") == ["a/gamma.txt", "a/alpha.txt", "c/Beta.txt", "b/zeta.txt"]
+    # The limit applies after the sort.
+    assert [h.name for h in search(conn, "", "name", limit=1, sort="-size").hits] == ["gamma.txt"]
+    with pytest.raises(BadQuery, match="sort must be 1 of path, -path, name"):
+        search(conn, "", "name", sort="mtime")
+

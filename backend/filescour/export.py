@@ -16,7 +16,7 @@ CSV_COLUMNS = ["path", "name", "ext", "size", "modified", "source", "cloud", "li
 
 
 def query_header(result: Result) -> dict:
-    return {
+    header = {
         "mode": result.mode,
         "query": result.query,
         "ignore_case": result.ignore_case,
@@ -24,6 +24,10 @@ def query_header(result: Result) -> dict:
         "total": result.total,
         "returned": len(result.hits),
     }
+    # Like the filters, the sort is named only when it is not the default.
+    if result.sort != "path":
+        header["sort"] = result.sort
+    return header
 
 
 def to_json(result: Result) -> str:

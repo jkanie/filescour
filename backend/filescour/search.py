@@ -19,6 +19,15 @@ MODES = ("name", "path", "regex", "words")
 SOURCES = ("file", "pdf", "doc", "none")
 CLOUDS = ("local", "online", "unknown")
 MAX_LIMIT = 1000
+# Sort keys and their columns. A leading "-" sorts high to low. Ties fall
+# back to the path, A to Z, so every order is fixed.
+SORT_COLUMNS = {
+    "path": 'f.path COLLATE "C"',
+    "name": 'f.name COLLATE "C"',
+    "size": "f.size",
+    "modified": "f.mtime",
+}
+SORTS = tuple(k for key in SORT_COLUMNS for k in (key, "-" + key))
 LINES_PER_HIT = 5
 LINE_CHARS = 300
 
@@ -75,6 +84,7 @@ class Result:
     filters: Filters
     total: int
     hits: list[Hit]
+    sort: str = "path"
 
 
 class BadQuery(ValueError):
@@ -140,9 +150,14 @@ def _filter_sql(f: Filters) -> tuple[list[str], list]:
 
 def search(conn: psycopg.Connection, q: str, mode: str = "name",
            filters: Filters = Filters(), ignore_case: bool = True,
-           limit: int = 200) -> Result:
+           limit: int = 200, sort: str = "path") -> Result:
     if mode not in MODES:
         raise BadQuery(f"mode must be 1 of {', '.join(MODES)}")
+    if sort not in SORTS:
+        raise BadQuery(f"sort must be 1 of {', '.join(SORTS)}")
+    order = SORT_COLUMNS[sort.lstrip("-")] + (" DESC" if sort.startswith("-") else "")
+    if sort.lstrip("-") != "path":
+        order += ', f.path COLLATE "C"'
     if not 1 <= limit <= MAX_LIMIT:
         raise BadQuery(f"limit must be from 1 to {MAX_LIMIT}")
     where, args = _filter_sql(filters)
@@ -200,7 +215,7 @@ def search(conn: psycopg.Connection, q: str, mode: str = "name",
                 "SELECT f.path, f.name, f.ext, f.size, f.mtime, f.content_source, f.cloud, "
                 f"f.truncated, z.path, {lines_sql} FROM files f "
                 f"LEFT JOIN files z ON z.id = f.parent_id WHERE {where_sql} "
-                "ORDER BY f.path COLLATE \"C\" LIMIT %s",
+                f"ORDER BY {order} LIMIT %s",
                 lines_args + args + [limit],
             ).fetchall()
     except errors.InvalidRegularExpression as exc:
@@ -216,4 +231,4 @@ def search(conn: psycopg.Connection, q: str, mode: str = "name",
             truncated=truncated, archive=archive,
             lines=[_line(x) for x in (lines or [])],
         ))
-    return Result(mode, q, ignore_case, filters, total, hits)
+    return Result(mode, q, ignore_case, filters, total, hits, sort)

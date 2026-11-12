@@ -1,6 +1,6 @@
 # Roadmap
 
-Planned work after the seed, with an hour estimate per item. The total is 31 hours.
+Planned work after the seed, with an hour estimate per item. The total is 30.5 hours.
 
 ## 1. Background worker with progress, 2 hours
 
@@ -12,10 +12,10 @@ Planned work after the seed, with an hour estimate per item. The total is 31 hou
 - What: return the position of each match within its line, and mark it on the screen.
 - Why: in a long line, the matching words are hard to spot.
 
-## 3. Paging and sorting, 1.5 hours
+## 3. Paging, plus a sort control on the screen, 1 hour
 
-- What: page through results past number 1,000, and sort by name, size, modified date as well as by path.
-- Why: a broad search on a big drive returns more than 1,000 files today, and the rest cannot be reached.
+- What: page through results past number 1,000, and a control on the screen for the `sort` parameter that `/search` and `/export` already take.
+- Why: a broad search on a big drive returns more than 1,000 files today, and the rest cannot be reached. The screen still lists hits by path only.
 
 ## 4. File preview, 2 hours
 
@@ -74,4 +74,4 @@ Planned work after the seed, with an hour estimate per item. The total is 31 hou
 
 ## Total
 
-34.5 hours.
+30.5 hours.

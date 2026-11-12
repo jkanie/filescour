@@ -206,7 +206,7 @@ How a run works:
 | GET | `/fetch` | Counts the journal rows by state, with the size of the queued files and the current limits. |
 | POST | `/fetch` | Queues online-only files to read. Body: `{"paths": ["/path/a.txt"], "mode": "temporary"}`. |
 | POST | `/fetch/run?limit=N` | Runs up to N journal rows (Windows only). Optional: `free_floor_mb`, `max_file_mb`, `wait_seconds`. Answers with this run's counts and the journal `totals`. |
-| GET | `/search` | Searches. Parameters: `q`, `mode`, `ignore_case`, `limit`, `folder`, `ext` (repeatable), `min_size`, `max_size`, `modified_after`, `modified_before`, `source`, `cloud`. |
+| GET | `/search` | Searches. Parameters: `q`, `mode`, `ignore_case`, `limit`, `sort`, `folder`, `ext` (repeatable), `min_size`, `max_size`, `modified_after`, `modified_before`, `source`, `cloud`. `sort` takes `path` (the default), `name`, `size`, `modified`, each with an optional leading `-` for high to low. A tie falls back to the path, A to Z. |
 | GET | `/export?format=csv` | The same search as a CSV or JSON file. |
 
 ## Sample export

@@ -68,9 +68,12 @@ def _filters(
                    modified_before=modified_before, source=source, cloud=cloud)
 
 
-def _run(conn, q, mode, filters, ignore_case, limit):
+Sort = Literal["path", "-path", "name", "-name", "size", "-size", "modified", "-modified"]
+
+
+def _run(conn, q, mode, filters, ignore_case, limit, sort):
     try:
-        return search(conn, q, mode, filters, ignore_case, limit)
+        return search(conn, q, mode, filters, ignore_case, limit, sort)
     except BadQuery as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
@@ -164,10 +167,11 @@ def do_search(
     mode: Literal["name", "path", "regex", "words"] = "name",
     ignore_case: bool = True,
     limit: int = Query(default=200, ge=1, le=MAX_LIMIT),
+    sort: Sort = "path",
     filters: Filters = Depends(_filters),
     conn=Depends(get_conn),
 ):
-    result = _run(conn, q, mode, filters, ignore_case, limit)
+    result = _run(conn, q, mode, filters, ignore_case, limit, sort)
     return {
         "search": export.query_header(result),
         "hits": [h.__dict__ | {"lines": [ln.__dict__ for ln in h.lines]}
@@ -182,10 +186,11 @@ def do_export(
     mode: Literal["name", "path", "regex", "words"] = "name",
     ignore_case: bool = True,
     limit: int = Query(default=MAX_LIMIT, ge=1, le=MAX_LIMIT),
+    sort: Sort = "path",
     filters: Filters = Depends(_filters),
     conn=Depends(get_conn),
 ):
-    result = _run(conn, q, mode, filters, ignore_case, limit)
+    result = _run(conn, q, mode, filters, ignore_case, limit, sort)
     if format == "json":
         body, media = export.to_json(result), "application/json"
     else:

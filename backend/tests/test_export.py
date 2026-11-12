@@ -59,3 +59,14 @@ def test_json_export_is_stable(conn, tmp_path):
     result = search(conn, "", "name")
     assert export.to_json(result) == export.to_json(search(conn, "", "name"))
     assert export.to_json(result).endswith("}\n")
+
+
+def test_the_header_names_a_sort_other_than_the_default(conn, tmp_path):
+    build(conn, tmp_path)
+    assert "sort" not in export.query_header(search(conn, "", "name"))
+    header = export.query_header(search(conn, "", "name", sort="-modified"))
+    assert header["sort"] == "-modified"
+    assert export.to_csv(search(conn, "", "name", sort="size")).startswith(
+        '# filescour search: {"filters": {}, "ignore_case": true, "mode": "name", '
+        '"query": "", "returned": 3, "sort": "size", "total": 3}\n')
+
