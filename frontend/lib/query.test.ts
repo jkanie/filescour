@@ -7,6 +7,8 @@ import {
   formatSize,
   limitParams,
   mbToBytes,
+  pageLabel,
+  pages,
   splitExts,
   toParams,
 } from "./query";
@@ -16,6 +18,19 @@ const form = (over: Partial<typeof emptyForm>) => ({ ...emptyForm, ...over });
 describe("toParams", () => {
   it("sends only the query, mode and case for an empty form", () => {
     expect(toParams(emptyForm).toString()).toBe("q=&mode=name&ignore_case=true");
+  });
+
+  it("labels a page and finds the pages around it", () => {
+    expect(pageLabel(0, 3, 3)).toBe("3 files");
+    expect(pageLabel(0, 1, 1)).toBe("1 file");
+    expect(pageLabel(0, 200, 950)).toBe("Showing 1-200 of 950 files");
+    expect(pageLabel(800, 150, 950)).toBe("Showing 801-950 of 950 files");
+    expect(pages(0, 200, 950)).toEqual({ previous: null, next: 200 });
+    expect(pages(200, 200, 950)).toEqual({ previous: 0, next: 400 });
+    expect(pages(800, 150, 950)).toEqual({ previous: 600, next: null });
+    expect(pages(0, 3, 3)).toEqual({ previous: null, next: null });
+    // A start that is not a multiple of the page size still goes back to 0.
+    expect(pages(150, 200, 950).previous).toBe(0);
   });
 
   it("sends a sort only when it is not the API's default", () => {

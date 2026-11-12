@@ -113,7 +113,7 @@ On every push and pull request, GitHub Actions runs the back-end tests (`pytest`
 - Word search uses PostgreSQL's `simple` text search configuration, with no stemming. It covers characters 1 to 500,000 of each file, which keeps every index entry under PostgreSQL's 1 MB limit. Name, path, regular-expression searches cover all of the stored text.
 - Text is stored up to 10,000,000 characters per file, and per zip entry. A longer file is cut there and marked as cut in the results.
 - The date filters work in UTC. The API's `modified_after` includes its moment and `modified_before` excludes its moment. On the screen, "Modified to" includes the whole day you pick.
-- Results come in path order unless the Sort list on the screen (or the API's `sort`) asks for another order: name, size, modified date, each either way. Each search gives up to 1,000 results, with the total count of matches. Export CSV and Export JSON keep the sort.
+- Results come in path order unless the Sort list on the screen (or the API's `sort`) asks for another order: name, size, modified date, each either way. The screen shows 200 results a page, with the total count of matches, plus Previous page and Next page buttons that keep the search on the screen. Export CSV and Export JSON keep the sort and always start at the 1st match (up to 1,000 rows).
 
 ## Word and OpenDocument files
 
@@ -206,7 +206,7 @@ How a run works:
 | GET | `/fetch` | Counts the journal rows by state, with the size of the queued files and the current limits. |
 | POST | `/fetch` | Queues online-only files to read. Body: `{"paths": ["/path/a.txt"], "mode": "temporary"}`. |
 | POST | `/fetch/run?limit=N` | Runs up to N journal rows (Windows only). Optional: `free_floor_mb`, `max_file_mb`, `wait_seconds`. Answers with this run's counts and the journal `totals`. |
-| GET | `/search` | Searches. Parameters: `q`, `mode`, `ignore_case`, `limit`, `sort`, `folder`, `ext` (repeatable), `min_size`, `max_size`, `modified_after`, `modified_before`, `source`, `cloud`. `sort` takes `path` (the default), `name`, `size`, `modified`, each with an optional leading `-` for high to low. A tie falls back to the path, A to Z. |
+| GET | `/search` | Searches. Parameters: `q`, `mode`, `ignore_case`, `limit`, `offset`, `sort`, `folder`, `ext` (repeatable), `min_size`, `max_size`, `modified_after`, `modified_before`, `source`, `cloud`. `sort` takes `path` (the default), `name`, `size`, `modified`, each with an optional leading `-` for high to low. A tie falls back to the path, A to Z, so `offset` (the number of matches to skip, 0 by default) pages through a fixed order. `/export` takes `offset` too. |
 | GET | `/export?format=csv` | The same search as a CSV or JSON file. |
 
 ## Sample export
@@ -224,7 +224,7 @@ path,name,ext,size,modified,source,cloud,line,text
 ## Limits today
 
 - The online-only check reads real Windows attributes only when filescour runs on Windows. That code path has not been run yet (the tests here use a stand-in), and the tool has not been tried on a real OneDrive or Dropbox folder.
-- Inside WSL, every file on a Windows drive is `unknown`, and its text is not read unless its folder allows it. Reading the Windows attributes from WSL is item 10 in [ROADMAP.md](ROADMAP.md).
+- Inside WSL, every file on a Windows drive is `unknown`, and its text is not read unless its folder allows it. Reading the Windows attributes from WSL is item 9 in [ROADMAP.md](ROADMAP.md).
 - Reading online-only files runs only on Windows, and it uses the OneDrive commands above. It has not been run on Windows yet (the tests use a stand-in), and it is not known whether Dropbox acts on the same commands.
 - A down-load run happens inside 1 request to the API, which is slow for many files. A background worker is item 1 in [ROADMAP.md](ROADMAP.md).
 - Scanned PDFs and images have no text layer, and only their names, paths, sizes, dates are searchable.

@@ -39,6 +39,14 @@ def test_end_to_end(conn, tmp_path):
         assert [h["name"] for h in exp["hits"]] == ["scan.jpg", "plan.md"]
         assert c.get("/search", params={"sort": "mtime"}).status_code == 422
 
+        page = c.get("/search", params={"q": "", "limit": 1, "offset": 1}).json()
+        assert [h["name"] for h in page["hits"]] == ["scan.jpg"]
+        assert (page["search"]["offset"], page["search"]["total"]) == (1, 2)
+        exp = c.get("/export", params={"format": "json", "limit": 1, "offset": 1}).json()
+        assert [h["name"] for h in exp["hits"]] == ["scan.jpg"]
+        assert "offset" not in c.get("/search", params={"q": ""}).json()["search"]
+        assert c.get("/search", params={"offset": -1}).status_code == 422
+
         exp = c.get("/export", params={"format": "csv", "q": "budget", "mode": "words"})
         assert exp.status_code == 200
         assert exp.headers["content-type"].startswith("text/csv")

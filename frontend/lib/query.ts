@@ -150,3 +150,21 @@ export function limitParams(form: LimitsForm): URLSearchParams {
   }
   return p;
 }
+
+// The API's default limit, so 1 page of results on the screen.
+export const PAGE_SIZE = 200;
+
+// Where the page before and the page after start, or null when there is none.
+export function pages(offset: number, shown: number, total: number) {
+  return {
+    previous: offset > 0 ? Math.max(0, offset - PAGE_SIZE) : null,
+    next: offset + shown < total ? offset + shown : null,
+  };
+}
+
+// "Showing 201-400 of 950 files", or the bare count when 1 page holds them all.
+export function pageLabel(offset: number, shown: number, total: number): string {
+  const files = `${total} ${total === 1 ? "file" : "files"}`;
+  if (offset === 0 && shown === total) return files;
+  return `Showing ${offset + 1}-${offset + shown} of ${files}`;
+}

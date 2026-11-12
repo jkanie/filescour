@@ -85,6 +85,7 @@ class Result:
     total: int
     hits: list[Hit]
     sort: str = "path"
+    offset: int = 0
 
 
 class BadQuery(ValueError):
@@ -150,9 +151,11 @@ def _filter_sql(f: Filters) -> tuple[list[str], list]:
 
 def search(conn: psycopg.Connection, q: str, mode: str = "name",
            filters: Filters = Filters(), ignore_case: bool = True,
-           limit: int = 200, sort: str = "path") -> Result:
+           limit: int = 200, sort: str = "path", offset: int = 0) -> Result:
     if mode not in MODES:
         raise BadQuery(f"mode must be 1 of {', '.join(MODES)}")
+    if offset < 0:
+        raise BadQuery("offset must be 0 or more")
     if sort not in SORTS:
         raise BadQuery(f"sort must be 1 of {', '.join(SORTS)}")
     order = SORT_COLUMNS[sort.lstrip("-")] + (" DESC" if sort.startswith("-") else "")
@@ -215,8 +218,8 @@ def search(conn: psycopg.Connection, q: str, mode: str = "name",
                 "SELECT f.path, f.name, f.ext, f.size, f.mtime, f.content_source, f.cloud, "
                 f"f.truncated, z.path, {lines_sql} FROM files f "
                 f"LEFT JOIN files z ON z.id = f.parent_id WHERE {where_sql} "
-                f"ORDER BY {order} LIMIT %s",
-                lines_args + args + [limit],
+                f"ORDER BY {order} LIMIT %s OFFSET %s",
+                lines_args + args + [limit, offset],
             ).fetchall()
     except errors.InvalidRegularExpression as exc:
         raise BadQuery(f"invalid regular expression: {exc.diag.message_primary}") from exc
@@ -231,4 +234,4 @@ def search(conn: psycopg.Connection, q: str, mode: str = "name",
             truncated=truncated, archive=archive,
             lines=[_line(x) for x in (lines or [])],
         ))
-    return Result(mode, q, ignore_case, filters, total, hits, sort)
+    return Result(mode, q, ignore_case, filters, total, hits, sort, offset)

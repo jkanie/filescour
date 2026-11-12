@@ -19,6 +19,8 @@ import {
   type LimitsForm,
   formatSize,
   type Mode,
+  pageLabel,
+  pages,
   type SearchForm,
   type Sort,
   type Source,
@@ -279,6 +281,14 @@ function Folders({
   );
 }
 
+// Export CSV and Export JSON start at the 1st match whatever page is on the
+// screen, as /export gives up to 1,000 rows, not 1 page.
+function fromStart(params: URLSearchParams) {
+  const p = new URLSearchParams(params);
+  p.delete("offset");
+  return p;
+}
+
 function files(n: number) {
   return `${n} ${n === 1 ? "file" : "files"}`;
 }
@@ -353,13 +363,36 @@ function OnlineHits({
   );
 }
 
-function Results({ hits, total }: { hits: Hit[]; total: number }) {
-  if (hits.length === 0) return <p className="muted">No file matches.</p>;
+function Results({
+  hits,
+  total,
+  offset,
+  onPage,
+}: {
+  hits: Hit[];
+  total: number;
+  offset: number;
+  onPage: (offset: number) => void;
+}) {
+  if (hits.length === 0) {
+    return <p className="muted">{offset > 0 ? `No file past number ${offset}.` : "No file matches."}</p>;
+  }
+  const { previous, next } = pages(offset, hits.length, total);
   return (
     <>
-      <p className="muted">
-        {total === hits.length ? files(total) : `Showing ${hits.length} of ${files(total)}`}
-      </p>
+      <div className="row">
+        <p className="muted">{pageLabel(offset, hits.length, total)}</p>
+        {previous !== null && (
+          <button type="button" onClick={() => onPage(previous)}>
+            Previous page
+          </button>
+        )}
+        {next !== null && (
+          <button type="button" onClick={() => onPage(next)}>
+            Next page
+          </button>
+        )}
+      </div>
       <div className="table-wrap">
         <table>
           <thead>
@@ -412,6 +445,7 @@ export default function Page() {
   const [form, setForm] = useState<SearchForm>(emptyForm);
   const [hits, setHits] = useState<Hit[] | null>(null);
   const [total, setTotal] = useState(0);
+  const [offset, setOffset] = useState(0);
   const [params, setParams] = useState<URLSearchParams | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -421,21 +455,31 @@ export default function Page() {
   const set = <K extends keyof SearchForm>(key: K, value: SearchForm[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
 
-  async function run(e?: FormEvent) {
+  // A new search starts at the 1st page. A page button keeps the search on the
+  // screen (not any edits to the form since) and moves its start.
+  async function run(e?: FormEvent, page?: number) {
     e?.preventDefault();
     setError("");
+    const at = page ?? 0;
     let p: URLSearchParams;
-    try {
-      p = toParams(form);
-    } catch (err) {
-      setError((err as Error).message);
-      return;
+    if (page !== undefined && params) {
+      p = new URLSearchParams(params);
+      p.delete("offset");
+    } else {
+      try {
+        p = toParams(form);
+      } catch (err) {
+        setError((err as Error).message);
+        return;
+      }
     }
+    if (at > 0) p.set("offset", String(at));
     setBusy(true);
     try {
       const res = await api.search(p);
       setHits(res.hits);
       setTotal(res.search.total);
+      setOffset(at);
       setParams(p);
     } catch (err) {
       setError((err as Error).message);
@@ -598,10 +642,10 @@ export default function Page() {
             <h2 id="results-h">Results</h2>
             {params && hits.length > 0 && (
               <>
-                <a className="button" href={api.exportUrl(params, "csv")}>
+                <a className="button" href={api.exportUrl(fromStart(params), "csv")}>
                   Export CSV
                 </a>
-                <a className="button" href={api.exportUrl(params, "json")}>
+                <a className="button" href={api.exportUrl(fromStart(params), "json")}>
                   Export JSON
                 </a>
               </>
@@ -613,7 +657,7 @@ export default function Page() {
             onDone={() => setFoldersKey((k) => k + 1)}
             limits={limits}
           />
-          <Results hits={hits} total={total} />
+          <Results hits={hits} total={total} offset={offset} onPage={(at) => void run(undefined, at)} />
         </section>
       )}
     </main>

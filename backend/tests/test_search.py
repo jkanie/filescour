@@ -137,3 +137,13 @@ def test_sort_by_name_size_modified_either_way(conn, tmp_path):
     with pytest.raises(BadQuery, match="sort must be 1 of path, -path, name"):
         search(conn, "", "name", sort="mtime")
 
+    # Pages: the offset counts from 0 in the sorted order, and the total
+    # stays the count of every match.
+    assert order("-size")[1:3] == [h.path.removeprefix(str(tmp_path) + "/") for h in
+                                   search(conn, "", "name", limit=2, sort="-size", offset=1).hits]
+    page = search(conn, "", "name", limit=3, offset=3)
+    assert (page.total, page.offset, [h.name for h in page.hits]) == (4, 3, ["Beta.txt"])
+    assert search(conn, "", "name", offset=9).hits == []
+    with pytest.raises(BadQuery, match="offset must be 0 or more"):
+        search(conn, "", "name", offset=-1)
+

@@ -27,6 +27,10 @@ def query_header(result: Result) -> dict:
     # Like the filters, the sort is named only when it is not the default.
     if result.sort != "path":
         header["sort"] = result.sort
+    # A page after the 1st names where it starts. The order holds across pages
+    # because every sort ends on the path.
+    if result.offset:
+        header["offset"] = result.offset
     return header
 
 
