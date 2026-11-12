@@ -4,6 +4,16 @@
 export type Mode = "name" | "path" | "regex" | "words";
 export type Source = "" | "file" | "pdf" | "doc" | "none";
 export type Cloud = "" | "local" | "online" | "unknown";
+// The API's sort keys. A leading "-" sorts high to low.
+export type Sort =
+  | "path"
+  | "-path"
+  | "name"
+  | "-name"
+  | "size"
+  | "-size"
+  | "modified"
+  | "-modified";
 
 export interface SearchForm {
   q: string;
@@ -17,6 +27,7 @@ export interface SearchForm {
   modifiedTo: string; // yyyy-mm-dd, the last day to include, or ""
   source: Source;
   cloud: Cloud;
+  sort: Sort;
 }
 
 export const emptyForm: SearchForm = {
@@ -31,6 +42,7 @@ export const emptyForm: SearchForm = {
   modifiedTo: "",
   source: "",
   cloud: "",
+  sort: "path",
 };
 
 const MB = 1024 * 1024;
@@ -91,6 +103,8 @@ export function toParams(form: SearchForm): URLSearchParams {
   }
   if (form.source) p.set("source", form.source);
   if (form.cloud) p.set("cloud", form.cloud);
+  // The API sorts by path when no sort is sent, so the default stays out of the URL.
+  if (form.sort !== "path") p.set("sort", form.sort);
   if ((form.mode === "regex" || form.mode === "words") && !form.q.trim()) {
     throw new FormError(
       form.mode === "regex" ? "Type a regular expression to search for." : "Type at least 1 word.",

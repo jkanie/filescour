@@ -12,10 +12,10 @@ Planned work after the seed, with an hour estimate per item. The total is 30.5 h
 - What: return the position of each match within its line, and mark it on the screen.
 - Why: in a long line, the matching words are hard to spot.
 
-## 3. Paging, plus a sort control on the screen, 1 hour
+## 3. Paging past 1,000 results, 1 hour
 
-- What: page through results past number 1,000, and a control on the screen for the `sort` parameter that `/search` and `/export` already take.
-- Why: a broad search on a big drive returns more than 1,000 files today, and the rest cannot be reached. The screen still lists hits by path only.
+- What: page through results past number 1,000, on the screen and in `/search`, with the sort kept from page to page.
+- Why: a broad search on a big drive returns more than 1,000 files today, and the rest cannot be reached.
 
 ## 4. File preview, 2 hours
 

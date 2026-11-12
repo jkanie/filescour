@@ -18,6 +18,14 @@ describe("toParams", () => {
     expect(toParams(emptyForm).toString()).toBe("q=&mode=name&ignore_case=true");
   });
 
+  it("sends a sort only when it is not the API's default", () => {
+    expect(toParams(form({ sort: "path" })).has("sort")).toBe(false);
+    expect(toParams(form({ sort: "-size" })).toString()).toBe(
+      "q=&mode=name&ignore_case=true&sort=-size",
+    );
+    expect(toParams(form({ sort: "modified" })).get("sort")).toBe("modified");
+  });
+
   it("sends every filter in the names the API reads", () => {
     const p = toParams(
       form({

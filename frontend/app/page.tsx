@@ -20,6 +20,7 @@ import {
   formatSize,
   type Mode,
   type SearchForm,
+  type Sort,
   type Source,
   toParams,
 } from "@/lib/query";
@@ -37,6 +38,17 @@ const SOURCES: { value: Source; label: string }[] = [
   { value: "pdf", label: "PDF text" },
   { value: "doc", label: "Word and OpenDocument text" },
   { value: "none", label: "No text indexed" },
+];
+
+const SORTS: { value: Sort; label: string }[] = [
+  { value: "path", label: "Path, A to Z" },
+  { value: "-path", label: "Path, Z to A" },
+  { value: "name", label: "Name, A to Z" },
+  { value: "-name", label: "Name, Z to A" },
+  { value: "-size", label: "Largest 1st" },
+  { value: "size", label: "Smallest 1st" },
+  { value: "-modified", label: "Newest 1st" },
+  { value: "modified", label: "Oldest 1st" },
 ];
 
 const CLOUDS: { value: Cloud; label: string }[] = [
@@ -557,6 +569,16 @@ export default function Page() {
               {CLOUDS.map((c) => (
                 <option key={c.value} value={c.value}>
                   {c.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Sort
+            <select id="sort" value={form.sort} onChange={(e) => set("sort", e.target.value as Sort)}>
+              {SORTS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
                 </option>
               ))}
             </select>

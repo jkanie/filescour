@@ -113,7 +113,7 @@ On every push and pull request, GitHub Actions runs the back-end tests (`pytest`
 - Word search uses PostgreSQL's `simple` text search configuration, with no stemming. It covers characters 1 to 500,000 of each file, which keeps every index entry under PostgreSQL's 1 MB limit. Name, path, regular-expression searches cover all of the stored text.
 - Text is stored up to 10,000,000 characters per file, and per zip entry. A longer file is cut there and marked as cut in the results.
 - The date filters work in UTC. The API's `modified_after` includes its moment and `modified_before` excludes its moment. On the screen, "Modified to" includes the whole day you pick.
-- Results come in path order, up to 1,000 per search, with the total count of matches.
+- Results come in path order unless the Sort list on the screen (or the API's `sort`) asks for another order: name, size, modified date, each either way. Each search gives up to 1,000 results, with the total count of matches. Export CSV and Export JSON keep the sort.
 
 ## Word and OpenDocument files
 
