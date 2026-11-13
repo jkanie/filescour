@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Literal
 
-from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
@@ -114,12 +114,19 @@ def get_root(root_id: int, conn=Depends(get_conn)):
 
 
 @app.post("/roots", status_code=201)
-def create_root(body: RootIn, conn=Depends(get_conn)):
+def create_root(body: RootIn, response: Response, conn=Depends(get_conn)):
+    # A folder that is already in the index keeps its id and takes the new extract_unknown. It answers 200 with
+    # "created": false, such that a client can tell it from a new folder (201).
+    known = conn.execute(
+        "SELECT 1 FROM roots WHERE path = %s", (os.path.realpath(body.path),)
+    ).fetchone()
     try:
         root_id = indexer.add_root(conn, body.path, body.extract_unknown)
     except NotADirectoryError as exc:
         raise HTTPException(status_code=422, detail=f"not a folder: {exc}") from exc
-    return {"id": root_id}
+    if known:
+        response.status_code = 200
+    return {"id": root_id, "created": not known}
 
 
 @app.delete("/roots/{root_id}", status_code=204)

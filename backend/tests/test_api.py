@@ -16,7 +16,11 @@ def test_end_to_end(conn, tmp_path):
         assert c.get("/health").json()["status"] == "ok"
         root = c.post("/roots", json={"path": str(tmp_path)})
         assert root.status_code == 201
+        assert root.json()["created"] is True
         rid = root.json()["id"]
+        # The same folder again (here with a trailing slash) keeps its id: 200, not created.
+        again = c.post("/roots", json={"path": str(tmp_path) + "/"})
+        assert (again.status_code, again.json()) == (200, {"id": rid, "created": False})
         assert c.post(f"/roots/{rid}/scan").json()["queued"] == 1
         ran = c.post("/jobs/run").json()
         assert (ran["processed"], ran["requeued"], ran["gave_up"], ran["done"]) == (1, 0, 0, 1)

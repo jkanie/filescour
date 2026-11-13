@@ -199,7 +199,7 @@ How a run works:
 | GET | `/health` | Reports the version. |
 | GET | `/roots` | Lists the folders, with counts of files, online-only files, files whose cloud state is not known, zip entries. |
 | GET | `/roots/{id}` | 1 folder with the same counts. An id with no folder gives 404. |
-| POST | `/roots` | Adds a folder. Body: `{"path": "/home/jon/Documents", "extract_unknown": false}`. |
+| POST | `/roots` | Adds a folder. Body: `{"path": "/home/jon/Documents", "extract_unknown": false}`. Answers 201 with `{"id": 1, "created": true}`. A folder already in the index keeps its id, takes the new `extract_unknown`, answers 200 with `"created": false`. |
 | DELETE | `/roots/{id}` | Removes a folder and its rows from the index. The files on disk are not touched. An id with no folder gives 404. |
 | POST | `/roots/{id}/scan` | Scans a folder and queues text extraction. |
 | GET | `/jobs` | Counts jobs by state: queued, running, done, failed, skipped. |
