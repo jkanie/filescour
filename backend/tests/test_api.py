@@ -24,6 +24,7 @@ def test_end_to_end(conn, tmp_path):
                                            "extract_unknown": False, "files": 2,
                                            "online": 0, "unknown": 0,
                                            "zip_entries": 0}]
+        assert c.get(f"/roots/{rid}").json() == c.get("/roots").json()[0]
 
         body = c.get("/search", params={"q": "^ship", "mode": "regex"}).json()
         assert body["search"]["total"] == 1
@@ -69,3 +70,5 @@ def test_bad_input_is_refused(conn, tmp_path):
         assert c.post("/roots", json={"path": str(tmp_path / "missing")}).status_code == 422
         assert c.post("/roots/999/scan").status_code == 404
         assert c.delete("/roots/999").json() == {"detail": "no folder with id 999"}
+        assert c.get("/roots/999").status_code == 404
+        assert c.get("/roots/999").json() == {"detail": "no folder with id 999"}

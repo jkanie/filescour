@@ -83,19 +83,34 @@ def health():
     return {"status": "ok", "version": __version__}
 
 
+ROOT_COUNTS = (
+    "SELECT r.id, r.path, r.extract_unknown, "
+    "count(f.id) FILTER (WHERE f.parent_id IS NULL), "
+    "count(f.id) FILTER (WHERE f.parent_id IS NULL AND f.cloud = 'online'), "
+    "count(f.id) FILTER (WHERE f.parent_id IS NULL AND f.cloud = 'unknown'), "
+    "count(f.id) FILTER (WHERE f.parent_id IS NOT NULL) FROM roots r "
+    "LEFT JOIN files f ON f.root_id = r.id"
+)
+
+
+def _root(row):
+    i, p, x, n, on, un, z = row
+    return {"id": i, "path": p, "extract_unknown": x, "files": n,
+            "online": on, "unknown": un, "zip_entries": z}
+
+
 @app.get("/roots")
 def list_roots(conn=Depends(get_conn)):
-    rows = conn.execute(
-        "SELECT r.id, r.path, r.extract_unknown, "
-        "count(f.id) FILTER (WHERE f.parent_id IS NULL), "
-        "count(f.id) FILTER (WHERE f.parent_id IS NULL AND f.cloud = 'online'), "
-        "count(f.id) FILTER (WHERE f.parent_id IS NULL AND f.cloud = 'unknown'), "
-        "count(f.id) FILTER (WHERE f.parent_id IS NOT NULL) FROM roots r "
-        "LEFT JOIN files f ON f.root_id = r.id GROUP BY r.id ORDER BY r.id"
-    ).fetchall()
-    return [{"id": i, "path": p, "extract_unknown": x, "files": n,
-             "online": on, "unknown": un, "zip_entries": z}
-            for i, p, x, n, on, un, z in rows]
+    rows = conn.execute(ROOT_COUNTS + " GROUP BY r.id ORDER BY r.id").fetchall()
+    return [_root(row) for row in rows]
+
+
+@app.get("/roots/{root_id}")
+def get_root(root_id: int, conn=Depends(get_conn)):
+    row = conn.execute(ROOT_COUNTS + " WHERE r.id = %s GROUP BY r.id", (root_id,)).fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"no folder with id {root_id}")
+    return _root(row)
 
 
 @app.post("/roots", status_code=201)
