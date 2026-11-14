@@ -76,3 +76,26 @@ def test_bad_input_is_refused(conn, tmp_path):
         assert c.delete("/roots/999").json() == {"detail": "no folder with id 999"}
         assert c.get("/roots/999").status_code == 404
         assert c.get("/roots/999").json() == {"detail": "no folder with id 999"}
+
+
+def test_jobs_count_per_folder(conn, tmp_path):
+    write(tmp_path / "a" / "1.txt", "one")
+    write(tmp_path / "a" / "2.txt", "two")
+    write(tmp_path / "b" / "3.txt", "three")
+    with client() as c:
+        a = c.post("/roots", json={"path": str(tmp_path / "a")}).json()["id"]
+        b = c.post("/roots", json={"path": str(tmp_path / "b")}).json()["id"]
+        assert c.post(f"/roots/{a}/scan").json()["queued"] == 2
+        assert c.post(f"/roots/{b}/scan").json()["queued"] == 1
+        assert c.post("/jobs/run", params={"limit": 1}).json()["processed"] == 1
+        everything = c.get("/jobs").json()
+        per = [c.get("/jobs", params={"root": r}).json() for r in (a, b)]
+        assert everything["queued"] + everything["done"] == 3
+        assert sum(p["queued"] for p in per) == everything["queued"]
+        assert sum(p["done"] for p in per) == everything["done"]
+        assert [p["queued"] + p["done"] for p in per] == [2, 1]
+        assert per[0].keys() == everything.keys()
+        missing = c.get("/jobs", params={"root": max(a, b) + 1})
+        assert missing.status_code == 404
+        assert missing.json()["detail"] == f"no folder with id {max(a, b) + 1}"
+        assert c.get("/jobs", params={"root": "x"}).status_code == 422

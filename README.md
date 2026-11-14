@@ -202,7 +202,7 @@ How a run works:
 | POST | `/roots` | Adds a folder. Body: `{"path": "/home/jon/Documents", "extract_unknown": false}`. Answers 201 with `{"id": 1, "created": true}`. A folder already in the index keeps its id, takes the new `extract_unknown`, answers 200 with `"created": false`. |
 | DELETE | `/roots/{id}` | Removes a folder and its rows from the index. The files on disk are not touched. An id with no folder gives 404. |
 | POST | `/roots/{id}/scan` | Scans a folder and queues text extraction. |
-| GET | `/jobs` | Counts jobs by state: queued, running, done, failed, skipped. |
+| GET | `/jobs` | Counts jobs by state: queued, running, done, failed, skipped. `?root=ID` counts only the jobs of that folder's files. An id with no folder gives 404. |
 | POST | `/jobs/run?limit=N` | Runs up to N queued jobs. |
 | GET | `/fetch` | Counts the journal rows by state, with the size of the queued files and the current limits. |
 | POST | `/fetch` | Queues online-only files to read. Body: `{"paths": ["/path/a.txt"], "mode": "temporary"}`. |

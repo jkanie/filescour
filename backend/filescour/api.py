@@ -146,8 +146,11 @@ def scan(root_id: int, conn=Depends(get_conn)):
 
 
 @app.get("/jobs")
-def job_summary(conn=Depends(get_conn)):
-    return jobs.summary(conn)
+def job_summary(root: int | None = Query(default=None), conn=Depends(get_conn)):
+    # With ?root=ID, only the jobs of that folder's files. An id with no folder gives 404, as GET /roots/{id} does.
+    if root is not None and conn.execute("SELECT 1 FROM roots WHERE id = %s", (root,)).fetchone() is None:
+        raise HTTPException(status_code=404, detail=f"no folder with id {root}")
+    return jobs.summary(conn, root)
 
 
 @app.post("/jobs/run")

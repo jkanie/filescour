@@ -183,8 +183,17 @@ def _work(conn: psycopg.Connection, limit: int | None) -> int:
     return count
 
 
-def summary(conn: psycopg.Connection) -> dict[str, int]:
+def summary(conn: psycopg.Connection, root_id: int | None = None) -> dict[str, int]:
+    """Counts jobs by state, for every folder or, with root_id, for the files of 1 folder."""
     counts = {"queued": 0, "running": 0, "done": 0, "failed": 0, "skipped": 0}
-    for state, n in conn.execute("SELECT state, count(*) FROM jobs GROUP BY state"):
+    if root_id is None:
+        rows = conn.execute("SELECT state, count(*) FROM jobs GROUP BY state")
+    else:
+        rows = conn.execute(
+            "SELECT j.state, count(*) FROM jobs j JOIN files f ON f.id = j.file_id"
+            " WHERE f.root_id = %s GROUP BY j.state",
+            (root_id,),
+        )
+    for state, n in rows:
         counts[state] = n
     return counts
