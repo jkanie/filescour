@@ -153,6 +153,11 @@ def job_summary(root: int | None = Query(default=None), conn=Depends(get_conn)):
     return jobs.summary(conn, root)
 
 
+@app.get("/jobs/failed")
+def failed_jobs(limit: int = Query(default=100, ge=1, le=1000), conn=Depends(get_conn)):
+    return jobs.failed(conn, limit)
+
+
 @app.post("/jobs/run")
 def run_jobs(limit: int = Query(default=100, ge=1, le=10_000), conn=Depends(get_conn)):
     return {**jobs.run_counts(conn, limit), **jobs.summary(conn)}

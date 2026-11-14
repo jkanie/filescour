@@ -99,3 +99,24 @@ def test_jobs_count_per_folder(conn, tmp_path):
         assert missing.status_code == 404
         assert missing.json()["detail"] == f"no folder with id {max(a, b) + 1}"
         assert c.get("/jobs", params={"root": "x"}).status_code == 422
+
+
+def test_failed_jobs_name_the_file_and_the_reason(conn, tmp_path):
+    write(tmp_path / "good.txt", "fine")
+    (tmp_path / "bad.txt").write_bytes(b"caf\xe9")
+    (tmp_path / "worse.txt").write_bytes(b"\x80\x81")
+    with client() as c:
+        root = c.post("/roots", json={"path": str(tmp_path)}).json()["id"]
+        assert c.post(f"/roots/{root}/scan").json()["queued"] == 3
+        assert c.get("/jobs/failed").json() == []
+        assert c.post("/jobs/run").json()["processed"] == 3
+        failed = c.get("/jobs/failed").json()
+        assert sorted(f["path"] for f in failed) == [str(tmp_path / "bad.txt"), str(tmp_path / "worse.txt")]
+        assert {f["error"] for f in failed} == {"not UTF-8 text"}
+        assert all(f["attempts"] == 1 for f in failed)
+        # The most recent 1st.
+        assert failed[0]["updated_at"] >= failed[1]["updated_at"]
+        assert c.get("/jobs").json()["failed"] == 2
+        assert len(c.get("/jobs/failed", params={"limit": 1}).json()) == 1
+        assert c.get("/jobs/failed", params={"limit": 0}).status_code == 422
+        assert c.get("/jobs/failed", params={"limit": 1001}).status_code == 422

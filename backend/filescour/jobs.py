@@ -183,6 +183,19 @@ def _work(conn: psycopg.Connection, limit: int | None) -> int:
     return count
 
 
+def failed(conn: psycopg.Connection, limit: int = 100) -> list[dict]:
+    """The failed jobs, the most recent 1st, each with its file's path and the reason kept in its error column."""
+    rows = conn.execute(
+        "SELECT j.id, f.path, j.error, j.attempts, j.updated_at FROM jobs j JOIN files f ON f.id = j.file_id"
+        " WHERE j.state = 'failed' ORDER BY j.updated_at DESC, j.id DESC LIMIT %s",
+        (limit,),
+    ).fetchall()
+    return [
+        {"id": i, "path": path, "error": error, "attempts": attempts, "updated_at": at.isoformat()}
+        for i, path, error, attempts, at in rows
+    ]
+
+
 def summary(conn: psycopg.Connection, root_id: int | None = None) -> dict[str, int]:
     """Counts jobs by state, for every folder or, with root_id, for the files of 1 folder."""
     counts = {"queued": 0, "running": 0, "done": 0, "failed": 0, "skipped": 0}

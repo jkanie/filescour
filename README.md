@@ -203,6 +203,7 @@ How a run works:
 | DELETE | `/roots/{id}` | Removes a folder and its rows from the index. The files on disk are not touched. An id with no folder gives 404. |
 | POST | `/roots/{id}/scan` | Scans a folder and queues text extraction. |
 | GET | `/jobs` | Counts jobs by state: queued, running, done, failed, skipped. `?root=ID` counts only the jobs of that folder's files. An id with no folder gives 404. |
+| GET | `/jobs/failed?limit=N` | Lists up to N failed jobs (100 by default, at most 1000), the most recent 1st, each with its file's path, the reason, the attempts. |
 | POST | `/jobs/run?limit=N` | Runs up to N queued jobs. |
 | GET | `/fetch` | Counts the journal rows by state, with the size of the queued files and the current limits. |
 | POST | `/fetch` | Queues online-only files to read. Body: `{"paths": ["/path/a.txt"], "mode": "temporary"}`. |
