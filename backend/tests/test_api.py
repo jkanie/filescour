@@ -120,3 +120,25 @@ def test_failed_jobs_name_the_file_and_the_reason(conn, tmp_path):
         assert len(c.get("/jobs/failed", params={"limit": 1}).json()) == 1
         assert c.get("/jobs/failed", params={"limit": 0}).status_code == 422
         assert c.get("/jobs/failed", params={"limit": 1001}).status_code == 422
+
+
+def test_failed_jobs_can_be_queued_again(conn, tmp_path):
+    write(tmp_path / "good.txt", "fine")
+    (tmp_path / "bad.txt").write_bytes(b"caf\xe9")
+    with client() as c:
+        root = c.post("/roots", json={"path": str(tmp_path)}).json()["id"]
+        c.post(f"/roots/{root}/scan")
+        c.post("/jobs/run")
+        assert c.get("/jobs").json()["failed"] == 1
+        # Fix the file, then queue its job again.
+        write(tmp_path / "bad.txt", "café")
+        assert c.post("/jobs/failed/retry").json() == {"requeued": 1}
+        counts = c.get("/jobs").json()
+        assert (counts["failed"], counts["queued"], counts["done"]) == (0, 1, 1)
+        assert c.get("/jobs/failed").json() == []
+        assert c.post("/jobs/run").json()["processed"] == 1
+        assert c.get("/jobs").json()["done"] == 2
+        # Nothing failed, nothing to queue.
+        assert c.post("/jobs/failed/retry").json() == {"requeued": 0}
+        hits = c.get("/search", params={"q": "café", "mode": "words"}).json()["hits"]
+        assert [h["path"] for h in hits] == [str(tmp_path / "bad.txt")]

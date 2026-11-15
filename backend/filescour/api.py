@@ -158,6 +158,11 @@ def failed_jobs(limit: int = Query(default=100, ge=1, le=1000), conn=Depends(get
     return jobs.failed(conn, limit)
 
 
+@app.post("/jobs/failed/retry")
+def retry_failed_jobs(conn=Depends(get_conn)):
+    return {"requeued": jobs.retry_failed(conn)}
+
+
 @app.post("/jobs/run")
 def run_jobs(limit: int = Query(default=100, ge=1, le=10_000), conn=Depends(get_conn)):
     return {**jobs.run_counts(conn, limit), **jobs.summary(conn)}

@@ -196,6 +196,17 @@ def failed(conn: psycopg.Connection, limit: int = 100) -> list[dict]:
     ]
 
 
+def retry_failed(conn: psycopg.Connection) -> int:
+    """Puts every failed job back in the queue with its attempts at 0 and its error cleared, such as after the files
+    are fixed. Returns how many."""
+    with conn.transaction():
+        rows = conn.execute(
+            "UPDATE jobs SET state = 'queued', attempts = 0, error = NULL, updated_at = now()"
+            " WHERE state = 'failed' RETURNING id"
+        ).fetchall()
+    return len(rows)
+
+
 def summary(conn: psycopg.Connection, root_id: int | None = None) -> dict[str, int]:
     """Counts jobs by state, for every folder or, with root_id, for the files of 1 folder."""
     counts = {"queued": 0, "running": 0, "done": 0, "failed": 0, "skipped": 0}

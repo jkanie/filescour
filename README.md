@@ -204,6 +204,7 @@ How a run works:
 | POST | `/roots/{id}/scan` | Scans a folder and queues text extraction. |
 | GET | `/jobs` | Counts jobs by state: queued, running, done, failed, skipped. `?root=ID` counts only the jobs of that folder's files. An id with no folder gives 404. |
 | GET | `/jobs/failed?limit=N` | Lists up to N failed jobs (100 by default, at most 1000), the most recent 1st, each with its file's path, the reason, the attempts. |
+| POST | `/jobs/failed/retry` | Puts every failed job back in the queue, with its attempts at 0 and its reason cleared, such as after the files are fixed. Returns the count as `requeued`. |
 | POST | `/jobs/run?limit=N` | Runs up to N queued jobs. |
 | GET | `/fetch` | Counts the journal rows by state, with the size of the queued files and the current limits. |
 | POST | `/fetch` | Queues online-only files to read. Body: `{"paths": ["/path/a.txt"], "mode": "temporary"}`. |
