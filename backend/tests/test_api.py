@@ -157,6 +157,35 @@ def test_extensions_of_1_folder(conn, tmp_path):
         assert c.get("/roots/999999/extensions").status_code == 404
 
 
+def test_largest_files_of_1_folder(conn, tmp_path):
+    write(tmp_path / "small.txt", "1")
+    write(tmp_path / "docs" / "big.md", "x" * 50)
+    write(tmp_path / "docs" / "mid-a.txt", "x" * 20)
+    write(tmp_path / "mid-b.txt", "x" * 20)
+    zf = tmp_path / "old.zip"
+    with zipfile.ZipFile(zf, "w") as z:
+        z.writestr("huge.txt", "y" * 5000)
+    with client() as c:
+        rid = c.post("/roots", json={"path": str(tmp_path)}).json()["id"]
+        assert c.get(f"/roots/{rid}/largest").json() == []
+        c.post(f"/roots/{rid}/scan")
+        c.post("/jobs/run")
+        got = c.get(f"/roots/{rid}/largest").json()
+        # The zip counts at its own size (stored, so over 5000 bytes), and its entry is not listed. A tie goes by path.
+        assert zf.stat().st_size > 5000
+        assert [(h["path"], h["size"]) for h in got] == [
+            (str(zf), zf.stat().st_size),
+            (str(tmp_path / "docs" / "big.md"), 50),
+            (str(tmp_path / "docs" / "mid-a.txt"), 20),
+            (str(tmp_path / "mid-b.txt"), 20),
+            (str(tmp_path / "small.txt"), 1),
+        ]
+        assert all(h["cloud"] == "local" and h["mtime"] for h in got)
+        assert len(c.get(f"/roots/{rid}/largest", params={"limit": 2}).json()) == 2
+        assert c.get(f"/roots/{rid}/largest", params={"limit": 0}).status_code == 422
+        assert c.get("/roots/999999/largest").status_code == 404
+
+
 def test_failed_jobs_can_be_queued_again(conn, tmp_path):
     write(tmp_path / "good.txt", "fine")
     (tmp_path / "bad.txt").write_bytes(b"caf\xe9")

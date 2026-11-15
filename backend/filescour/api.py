@@ -127,6 +127,20 @@ def root_extensions(root_id: int, conn=Depends(get_conn)):
     return [{"ext": e, "files": n, "bytes": b} for e, n, b in rows]
 
 
+@app.get("/roots/{root_id}/largest")
+def root_largest(root_id: int, limit: int = Query(10, ge=1, le=MAX_LIMIT), conn=Depends(get_conn)):
+    # The biggest files of 1 folder, such as to free space: the most bytes 1st, then by path. A zip counts as 1 file
+    # here, at its own size, since its entries take no space of their own on the disk.
+    if conn.execute("SELECT 1 FROM roots WHERE id = %s", (root_id,)).fetchone() is None:
+        raise HTTPException(status_code=404, detail=f"no folder with id {root_id}")
+    rows = conn.execute(
+        "SELECT path, size, mtime, cloud FROM files WHERE root_id = %s AND parent_id IS NULL"
+        " ORDER BY size DESC, path LIMIT %s",
+        (root_id, limit),
+    ).fetchall()
+    return [{"path": p, "size": s, "mtime": m.isoformat(), "cloud": c} for p, s, m, c in rows]
+
+
 @app.post("/roots", status_code=201)
 def create_root(body: RootIn, response: Response, conn=Depends(get_conn)):
     # A folder that is already in the index keeps its id and takes the new extract_unknown. It answers 200 with
