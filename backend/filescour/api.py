@@ -113,6 +113,20 @@ def get_root(root_id: int, conn=Depends(get_conn)):
     return _root(row)
 
 
+@app.get("/roots/{root_id}/extensions")
+def root_extensions(root_id: int, conn=Depends(get_conn)):
+    # The file endings of 1 folder, for the ext filter of /search: the most files 1st, then A to Z. Zip entries count,
+    # since /search finds them too. A file with no ending has "" as its ext.
+    if conn.execute("SELECT 1 FROM roots WHERE id = %s", (root_id,)).fetchone() is None:
+        raise HTTPException(status_code=404, detail=f"no folder with id {root_id}")
+    rows = conn.execute(
+        "SELECT ext, count(*), coalesce(sum(size), 0) FROM files WHERE root_id = %s"
+        " GROUP BY ext ORDER BY count(*) DESC, ext",
+        (root_id,),
+    ).fetchall()
+    return [{"ext": e, "files": n, "bytes": b} for e, n, b in rows]
+
+
 @app.post("/roots", status_code=201)
 def create_root(body: RootIn, response: Response, conn=Depends(get_conn)):
     # A folder that is already in the index keeps its id and takes the new extract_unknown. It answers 200 with

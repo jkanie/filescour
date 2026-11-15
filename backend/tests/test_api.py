@@ -1,3 +1,5 @@
+import zipfile
+
 from fastapi.testclient import TestClient
 
 from filescour.api import app
@@ -120,6 +122,39 @@ def test_failed_jobs_name_the_file_and_the_reason(conn, tmp_path):
         assert len(c.get("/jobs/failed", params={"limit": 1}).json()) == 1
         assert c.get("/jobs/failed", params={"limit": 0}).status_code == 422
         assert c.get("/jobs/failed", params={"limit": 1001}).status_code == 422
+
+
+def test_extensions_of_1_folder(conn, tmp_path):
+    write(tmp_path / "a.txt", "12345")
+    write(tmp_path / "docs" / "B.TXT", "123")
+    write(tmp_path / "docs" / "plan.md", "1")
+    write(tmp_path / "Makefile", "all:\n")
+    zf = tmp_path / "old.zip"
+    with zipfile.ZipFile(zf, "w") as z:
+        z.writestr("notes/may.md", "12")
+        z.writestr("readme.txt", "1234567")
+    other = tmp_path.parent / (tmp_path.name + "-other")
+    write(other / "c.txt", "x")
+    with client() as c:
+        rid = c.post("/roots", json={"path": str(tmp_path)}).json()["id"]
+        oid = c.post("/roots", json={"path": str(other)}).json()["id"]
+        assert c.get(f"/roots/{rid}/extensions").json() == []
+        c.post(f"/roots/{rid}/scan")
+        c.post(f"/roots/{oid}/scan")
+        # The jobs read the zip's entries into the index.
+        c.post("/jobs/run")
+        # The zip's 2 entries count, and B.TXT counts as txt. The other folder's file does not.
+        assert c.get(f"/roots/{rid}/extensions").json() == [
+            {"ext": "txt", "files": 3, "bytes": 15},
+            {"ext": "md", "files": 2, "bytes": 3},
+            {"ext": "", "files": 1, "bytes": 5},
+            {"ext": "zip", "files": 1, "bytes": zf.stat().st_size},
+        ]
+        # Each ext works as is in the ext filter of /search.
+        hits = c.get("/search", params={"q": "", "ext": "md", "folder": str(tmp_path)}).json()["hits"]
+        assert len(hits) == 2
+        assert c.get(f"/roots/{oid}/extensions").json() == [{"ext": "txt", "files": 1, "bytes": 1}]
+        assert c.get("/roots/999999/extensions").status_code == 404
 
 
 def test_failed_jobs_can_be_queued_again(conn, tmp_path):
