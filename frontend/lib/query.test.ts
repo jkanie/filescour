@@ -5,6 +5,7 @@ import {
   emptyForm,
   emptyLimits,
   formatSize,
+  largestParams,
   limitParams,
   mbToBytes,
   pageLabel,
@@ -128,5 +129,24 @@ describe("limitParams", () => {
         "Largest file must be a whole number, 0 or more.",
       );
     }
+  });
+});
+
+describe("largestParams", () => {
+  it("sends nothing for the API's defaults", () => {
+    expect(largestParams("", "").toString()).toBe("");
+    expect(largestParams("  ", " , ").toString()).toBe("");
+  });
+
+  it("sends the limit and each ending once, as the search form does", () => {
+    expect(largestParams("25", "MP4, .mov, mp4").toString()).toBe("limit=25&ext=mp4&ext=mov");
+    expect(largestParams(" 007 ", "").toString()).toBe("limit=7");
+  });
+
+  it("refuses a limit the API would refuse", () => {
+    for (const bad of ["0", "1001", "-1", "2.5", "ten"]) {
+      expect(() => largestParams(bad, "")).toThrow(FormError);
+    }
+    expect(largestParams("1000", "").get("limit")).toBe("1000");
   });
 });

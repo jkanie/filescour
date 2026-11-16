@@ -128,15 +128,23 @@ def root_extensions(root_id: int, conn=Depends(get_conn)):
 
 
 @app.get("/roots/{root_id}/largest")
-def root_largest(root_id: int, limit: int = Query(10, ge=1, le=MAX_LIMIT), conn=Depends(get_conn)):
+def root_largest(
+    root_id: int,
+    limit: int = Query(10, ge=1, le=MAX_LIMIT),
+    ext: list[str] = Query(default=[]),
+    conn=Depends(get_conn),
+):
     # The biggest files of 1 folder, such as to free space: the most bytes 1st, then by path. A zip counts as 1 file
-    # here, at its own size, since its entries take no space of their own on the disk.
+    # here, at its own size, since its entries take no space of their own on the disk. ?ext= keeps only those
+    # endings, written as for /search (repeatable or comma-separated, dots and case do not matter).
     if conn.execute("SELECT 1 FROM roots WHERE id = %s", (root_id,)).fetchone() is None:
         raise HTTPException(status_code=404, detail=f"no folder with id {root_id}")
+    exts = list(norm_exts(ext))
     rows = conn.execute(
         "SELECT path, size, mtime, cloud FROM files WHERE root_id = %s AND parent_id IS NULL"
-        " ORDER BY size DESC, path LIMIT %s",
-        (root_id, limit),
+        + (" AND ext = ANY(%s)" if exts else "")
+        + " ORDER BY size DESC, path LIMIT %s",
+        (root_id, exts, limit) if exts else (root_id, limit),
     ).fetchall()
     return [{"path": p, "size": s, "mtime": m.isoformat(), "cloud": c} for p, s, m, c in rows]
 

@@ -125,6 +125,21 @@ export function formatSize(bytes: number): string {
   return `${v < 10 ? v.toFixed(1) : Math.round(v)} ${units[i]}`;
 }
 
+// The query string of GET /roots/{id}/largest: how many files, as typed (empty
+// means the API's 10), and the endings as the search form takes them.
+export function largestParams(limit: string, ext: string): URLSearchParams {
+  const p = new URLSearchParams();
+  const t = limit.trim();
+  if (t !== "") {
+    if (!/^\d+$/.test(t) || Number(t) < 1 || Number(t) > 1000) {
+      throw new FormError("Files to list must be a whole number from 1 to 1000.");
+    }
+    p.set("limit", String(Number(t)));
+  }
+  for (const e of splitExts(ext)) p.append("ext", e);
+  return p;
+}
+
 // The 3 limits of a down-load run, as typed. Empty means "use the API's own
 // setting", which comes from the environment or the built-in default.
 export interface LimitsForm {

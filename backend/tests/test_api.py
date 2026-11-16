@@ -182,6 +182,14 @@ def test_largest_files_of_1_folder(conn, tmp_path):
         ]
         assert all(h["cloud"] == "local" and h["mtime"] for h in got)
         assert len(c.get(f"/roots/{rid}/largest", params={"limit": 2}).json()) == 2
+        # ?ext= keeps only those endings, as /search reads them: repeatable, comma-separated, any case, dots optional.
+        txt = [(str(tmp_path / "docs" / "mid-a.txt"), 20), (str(tmp_path / "mid-b.txt"), 20), (str(tmp_path / "small.txt"), 1)]
+        for params in ({"ext": "txt"}, {"ext": ".TXT"}, [("ext", "txt"), ("ext", "txt")]):
+            assert [(h["path"], h["size"]) for h in c.get(f"/roots/{rid}/largest", params=params).json()] == txt
+        both = c.get(f"/roots/{rid}/largest", params={"ext": "md,zip"}).json()
+        assert [h["path"] for h in both] == [str(zf), str(tmp_path / "docs" / "big.md")]
+        assert c.get(f"/roots/{rid}/largest", params={"ext": "pdf"}).json() == []
+        assert len(c.get(f"/roots/{rid}/largest", params={"ext": "txt", "limit": 1}).json()) == 1
         assert c.get(f"/roots/{rid}/largest", params={"limit": 0}).status_code == 422
         assert c.get("/roots/999999/largest").status_code == 404
 

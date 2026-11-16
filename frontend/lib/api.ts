@@ -38,6 +38,21 @@ export interface Root {
   zip_entries: number;
 }
 
+// 1 row of GET /roots/{id}/largest.
+export interface LargestFile {
+  path: string;
+  size: number;
+  mtime: string;
+  cloud: "local" | "online" | "unknown";
+}
+
+// 1 row of GET /roots/{id}/extensions. A file with no ending has "" as its ext.
+export interface ExtCount {
+  ext: string;
+  files: number;
+  bytes: number;
+}
+
 export interface JobCounts {
   queued: number;
   running: number;
@@ -105,6 +120,9 @@ export const api = {
       body: JSON.stringify({ path, extract_unknown: extractUnknown }),
     }),
   removeRoot: (id: number) => call<void>(`/roots/${id}`, { method: "DELETE" }),
+  extensions: (id: number) => call<ExtCount[]>(`/roots/${id}/extensions`),
+  largest: (id: number, params: URLSearchParams) =>
+    call<LargestFile[]>(`/roots/${id}/largest?${params}`),
   scan: (id: number) =>
     call<{
       added: number;
