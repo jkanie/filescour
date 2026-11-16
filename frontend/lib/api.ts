@@ -38,7 +38,7 @@ export interface Root {
   zip_entries: number;
 }
 
-// 1 row of GET /roots/{id}/largest.
+// 1 row of GET /roots/{id}/largest or GET /roots/{id}/newest.
 export interface LargestFile {
   path: string;
   size: number;
@@ -123,6 +123,8 @@ export const api = {
   extensions: (id: number) => call<ExtCount[]>(`/roots/${id}/extensions`),
   largest: (id: number, params: URLSearchParams) =>
     call<LargestFile[]>(`/roots/${id}/largest?${params}`),
+  newest: (id: number, params: URLSearchParams) =>
+    call<LargestFile[]>(`/roots/${id}/newest?${params}`),
   scan: (id: number) =>
     call<{
       added: number;

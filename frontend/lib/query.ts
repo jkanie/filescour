@@ -125,7 +125,7 @@ export function formatSize(bytes: number): string {
   return `${v < 10 ? v.toFixed(1) : Math.round(v)} ${units[i]}`;
 }
 
-// The query string of GET /roots/{id}/largest: how many files, as typed (empty
+// The query string of GET /roots/{id}/largest and /newest: how many files, as typed (empty
 // means the API's 10), and the endings as the search form takes them.
 export function largestParams(limit: string, ext: string): URLSearchParams {
   const p = new URLSearchParams();

@@ -1,3 +1,4 @@
+import os
 import zipfile
 
 from fastapi.testclient import TestClient
@@ -193,6 +194,30 @@ def test_largest_files_of_1_folder(conn, tmp_path):
         assert c.get(f"/roots/{rid}/largest", params={"limit": 0}).status_code == 422
         assert c.get("/roots/999999/largest").status_code == 404
 
+
+def test_newest_files_of_1_folder(conn, tmp_path):
+    files = {"old.txt": 1_600_000_000, "docs/mid.md": 1_700_000_000, "b.txt": 1_750_000_000, "a.txt": 1_750_000_000}
+    for name, t in files.items():
+        write(tmp_path / name, "x")
+        os.utime(tmp_path / name, (t, t))
+    zf = tmp_path / "new.zip"
+    with zipfile.ZipFile(zf, "w") as z:
+        z.writestr("inside.txt", "y")
+    os.utime(zf, (1_800_000_000, 1_800_000_000))
+    with client() as c:
+        rid = c.post("/roots", json={"path": str(tmp_path)}).json()["id"]
+        assert c.get(f"/roots/{rid}/newest").json() == []
+        c.post(f"/roots/{rid}/scan")
+        c.post("/jobs/run")
+        # The newest 1st, a tie by path, and the zip as 1 file with no entry listed.
+        got = c.get(f"/roots/{rid}/newest").json()
+        assert [h["path"] for h in got] == [str(zf), str(tmp_path / "a.txt"), str(tmp_path / "b.txt"),
+                                            str(tmp_path / "docs" / "mid.md"), str(tmp_path / "old.txt")]
+        assert [h["mtime"][:4] for h in got] == ["2027", "2025", "2025", "2023", "2020"]
+        assert [h["path"] for h in c.get(f"/roots/{rid}/newest", params={"ext": "txt", "limit": 2}).json()] == [
+            str(tmp_path / "a.txt"), str(tmp_path / "b.txt")]
+        assert c.get("/roots/999999/newest").status_code == 404
+        assert c.get(f"/roots/{rid}/newest", params={"limit": 0}).status_code == 422
 
 def test_failed_jobs_can_be_queued_again(conn, tmp_path):
     write(tmp_path / "good.txt", "fine")
