@@ -3,6 +3,7 @@ the online-only guard, the guards against hostile zips."""
 
 import io
 import json
+import os
 import shutil
 import struct
 import zipfile
@@ -386,7 +387,9 @@ def test_the_api_shows_entries(conn, tmp_path):
         assert c.post("/jobs/run").json()["done"] == 2
         assert c.get("/roots").json() == [{"id": rid, "path": str(tmp_path),
                                            "extract_unknown": False, "files": 2,
-                                           "online": 0, "unknown": 0, "zip_entries": 4}]
+                                           "online": 0, "unknown": 0, "zip_entries": 4,
+                                           # The zip at its own size, its 4 entries not counted again.
+                                           "bytes": os.path.getsize(zp) + len("plain\n")}]
         (hit,) = c.get("/search", params={"q": "^see", "mode": "regex"}).json()["hits"]
         assert (hit["path"], hit["archive"]) == (zp + "!/notes/may.txt", zp)
         exp = c.get("/export", params={"format": "json", "q": "see", "mode": "words"})

@@ -88,15 +88,17 @@ ROOT_COUNTS = (
     "count(f.id) FILTER (WHERE f.parent_id IS NULL), "
     "count(f.id) FILTER (WHERE f.parent_id IS NULL AND f.cloud = 'online'), "
     "count(f.id) FILTER (WHERE f.parent_id IS NULL AND f.cloud = 'unknown'), "
-    "count(f.id) FILTER (WHERE f.parent_id IS NOT NULL) FROM roots r "
+    "count(f.id) FILTER (WHERE f.parent_id IS NOT NULL), "
+    "coalesce(sum(f.size) FILTER (WHERE f.parent_id IS NULL), 0)::bigint FROM roots r "
     "LEFT JOIN files f ON f.root_id = r.id"
 )
 
 
 def _root(row):
-    i, p, x, n, on, un, z = row
+    # bytes is the size of the files on the disk, a zip at its own size, its entries not again.
+    i, p, x, n, on, un, z, b = row
     return {"id": i, "path": p, "extract_unknown": x, "files": n,
-            "online": on, "unknown": un, "zip_entries": z}
+            "online": on, "unknown": un, "zip_entries": z, "bytes": b}
 
 
 @app.get("/roots")

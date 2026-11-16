@@ -170,7 +170,7 @@ function Folders({
         <ul>
           {roots.map((r) => (
             <li key={r.id}>
-              <span className="path">{r.path}</span> ({files(r.files)}
+              <span className="path">{r.path}</span> ({files(r.files)}, {formatSize(r.bytes)}
               {r.online > 0 && `, ${r.online} online only`}
               {r.unknown > 0 && `, ${r.unknown} cloud state not known`}
               {r.zip_entries > 0 && `, ${r.zip_entries} inside zip files`}){" "}

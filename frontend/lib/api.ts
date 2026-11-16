@@ -36,6 +36,8 @@ export interface Root {
   online: number;
   unknown: number;
   zip_entries: number;
+  // The size of the files on the disk: a zip at its own size, its entries not counted again.
+  bytes: number;
 }
 
 // 1 row of GET /roots/{id}/largest or GET /roots/{id}/newest.

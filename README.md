@@ -197,7 +197,7 @@ How a run works:
 | Method | Path | What it does |
 |---|---|---|
 | GET | `/health` | Reports the version. |
-| GET | `/roots` | Lists the folders, with counts of files, online-only files, files whose cloud state is not known, zip entries. |
+| GET | `/roots` | Lists the folders, with counts of files, online-only files, files whose cloud state is not known, zip entries. `bytes` is the size of the files on the disk, a zip at its own size, its entries not counted again. |
 | GET | `/roots/{id}` | 1 folder with the same counts. An id with no folder gives 404. |
 | GET | `/roots/{id}/extensions` | The file endings of 1 folder, each with its count of files and their total bytes, the most files 1st, then A to Z. Zip entries count, as `/search` finds them too. A file with no ending has `""`. Each `ext` works as is in the `ext` filter of `/search`. An id with no folder gives 404. |
 | GET | `/roots/{id}/largest?limit=10&ext=mp4` | The biggest files of 1 folder, such as to free space: `path`, `size`, `mtime`, `cloud`, the most bytes 1st, then by path. A zip counts as 1 file at its own size, and its entries are not listed. `limit` is 1 to 1000 (10 by default). `ext` keeps only those endings, as for `/search` (repeatable or comma-separated, dots and case do not matter), such as the biggest videos only. An id with no folder gives 404. |
