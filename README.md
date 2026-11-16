@@ -31,7 +31,7 @@ Anyone with a lot of files on their own drives who needs to find a document by w
 
 - Back-end: Python and FastAPI. Built and tested with Python 3.13.18, FastAPI 0.115.12, psycopg 3.2.9, pypdf 5.6.0. Zip files are read with `zipfile` from Python's standard library. The package needs Python 3.11 or later.
 - Database: PostgreSQL with the `pg_trgm` extension. Built and tested with PostgreSQL 16.15. The schema uses generated columns, which need PostgreSQL 12 or later.
-- Front-end: Next.js 16.4.3 with React 19.2.9 and TypeScript 5.9.3, built and tested with Node.js 22.23.4.
+- Front-end: Next.js 16.4.6 with React 19.2.9 and TypeScript 5.9.3, built and tested with Node.js 22.23.4.
 - Tests: pytest 8.4.0 with Hypothesis 6.135.0 for the back-end, and Vitest 3.2.4 for the front-end.
 
 ## Set-up
@@ -200,8 +200,8 @@ How a run works:
 | GET | `/roots` | Lists the folders, with counts of files, online-only files, files whose cloud state is not known, zip entries. `bytes` is the size of the files on the disk, a zip at its own size, its entries not counted again. |
 | GET | `/roots/{id}` | 1 folder with the same counts. An id with no folder gives 404. |
 | GET | `/roots/{id}/extensions` | The file endings of 1 folder, each with its count of files and their total bytes, the most files 1st, then A to Z. Zip entries count, as `/search` finds them too. A file with no ending has `""`. Each `ext` works as is in the `ext` filter of `/search`. An id with no folder gives 404. |
-| GET | `/roots/{id}/largest?limit=10&ext=mp4` | The biggest files of 1 folder, such as to free space: `path`, `size`, `mtime`, `cloud`, the most bytes 1st, then by path. A zip counts as 1 file at its own size, and its entries are not listed. `limit` is 1 to 1000 (10 by default). `ext` keeps only those endings, as for `/search` (repeatable or comma-separated, dots and case do not matter), such as the biggest videos only. An id with no folder gives 404. |
-| GET | `/roots/{id}/newest?limit=10&ext=docx` | The files of 1 folder changed last, such as to find what was just saved: the rows, `limit`, `ext` of `/largest`, the newest `mtime` 1st, then by path. |
+| GET | `/roots/{id}/largest?limit=10&ext=mp4&min_size=0` | The biggest files of 1 folder, such as to free space: `path`, `size`, `mtime`, `cloud`, the most bytes 1st, then by path. A zip counts as 1 file at its own size, and its entries are not listed. `limit` is 1 to 1000 (10 by default). `ext` keeps only those endings, as for `/search` (repeatable or comma-separated, dots and case do not matter), such as the biggest videos only. `min_size` keeps only files of at least that many bytes (0 by default). An id with no folder gives 404. |
+| GET | `/roots/{id}/newest?limit=10&ext=docx` | The files of 1 folder changed last, such as to find what was just saved: the rows, `limit`, `ext`, `min_size` of `/largest`, the newest `mtime` 1st, then by path, such as the newest files of 100 MB or more. |
 | POST | `/roots` | Adds a folder. Body: `{"path": "/home/jon/Documents", "extract_unknown": false}`. Answers 201 with `{"id": 1, "created": true}`. A folder already in the index keeps its id, takes the new `extract_unknown`, answers 200 with `"created": false`. |
 | DELETE | `/roots/{id}` | Removes a folder and its rows from the index. The files on disk are not touched. An id with no folder gives 404. |
 | POST | `/roots/{id}/scan` | Scans a folder and queues text extraction. |

@@ -134,12 +134,14 @@ def root_largest(
     root_id: int,
     limit: int = Query(10, ge=1, le=MAX_LIMIT),
     ext: list[str] = Query(default=[]),
+    min_size: int = Query(0, ge=0),
     conn=Depends(get_conn),
 ):
     # The biggest files of 1 folder, such as to free space: the most bytes 1st, then by path. A zip counts as 1 file
     # here, at its own size, since its entries take no space of their own on the disk. ?ext= keeps only those
-    # endings, written as for /search (repeatable or comma-separated, dots and case do not matter).
-    return _root_files(conn, root_id, limit, ext, "size DESC, path")
+    # endings, written as for /search (repeatable or comma-separated, dots and case do not matter). ?min_size= keeps
+    # only files of at least that many bytes.
+    return _root_files(conn, root_id, limit, ext, min_size, "size DESC, path")
 
 
 @app.get("/roots/{root_id}/newest")
@@ -147,23 +149,24 @@ def root_newest(
     root_id: int,
     limit: int = Query(10, ge=1, le=MAX_LIMIT),
     ext: list[str] = Query(default=[]),
+    min_size: int = Query(0, ge=0),
     conn=Depends(get_conn),
 ):
     # The files of 1 folder changed last, such as to find what was just saved: the newest mtime 1st, then by path.
-    # It takes the rows, the limit, the ?ext= of /largest.
-    return _root_files(conn, root_id, limit, ext, "mtime DESC, path")
+    # It takes the rows, the limit, the ?ext=, the ?min_size= of /largest, such as the newest files of 100 MB or more.
+    return _root_files(conn, root_id, limit, ext, min_size, "mtime DESC, path")
 
 
-def _root_files(conn, root_id, limit, ext, order):
+def _root_files(conn, root_id, limit, ext, min_size, order):
     # The files on the disk of 1 folder (not zip entries), in order, for /largest and /newest.
     if conn.execute("SELECT 1 FROM roots WHERE id = %s", (root_id,)).fetchone() is None:
         raise HTTPException(status_code=404, detail=f"no folder with id {root_id}")
     exts = list(norm_exts(ext))
     rows = conn.execute(
-        "SELECT path, size, mtime, cloud FROM files WHERE root_id = %s AND parent_id IS NULL"
+        "SELECT path, size, mtime, cloud FROM files WHERE root_id = %s AND parent_id IS NULL AND size >= %s"
         + (" AND ext = ANY(%s)" if exts else "")
         + f" ORDER BY {order} LIMIT %s",
-        (root_id, exts, limit) if exts else (root_id, limit),
+        (root_id, min_size, exts, limit) if exts else (root_id, min_size, limit),
     ).fetchall()
     return [{"path": p, "size": s, "mtime": m.isoformat(), "cloud": c} for p, s, m, c in rows]
 

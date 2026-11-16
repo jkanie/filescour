@@ -193,6 +193,14 @@ def test_largest_files_of_1_folder(conn, tmp_path):
         assert len(c.get(f"/roots/{rid}/largest", params={"ext": "txt", "limit": 1}).json()) == 1
         assert c.get(f"/roots/{rid}/largest", params={"limit": 0}).status_code == 422
         assert c.get("/roots/999999/largest").status_code == 404
+        # ?min_size= keeps files of at least that many bytes, the size itself included, with ?ext= and the limit too.
+        assert [h["size"] for h in c.get(f"/roots/{rid}/largest", params={"min_size": 20}).json()] == [
+            zf.stat().st_size, 50, 20, 20]
+        assert [h["path"] for h in c.get(f"/roots/{rid}/largest", params={"min_size": 21, "ext": "txt"}).json()] == []
+        assert [h["path"] for h in c.get(f"/roots/{rid}/largest", params={"min_size": 20, "ext": "txt", "limit": 1}).json()] == [
+            str(tmp_path / "docs" / "mid-a.txt")]
+        assert len(c.get(f"/roots/{rid}/largest", params={"min_size": 0}).json()) == 5
+        assert c.get(f"/roots/{rid}/largest", params={"min_size": -1}).status_code == 422
 
 
 def test_newest_files_of_1_folder(conn, tmp_path):
@@ -218,6 +226,9 @@ def test_newest_files_of_1_folder(conn, tmp_path):
             str(tmp_path / "a.txt"), str(tmp_path / "b.txt")]
         assert c.get("/roots/999999/newest").status_code == 404
         assert c.get(f"/roots/{rid}/newest", params={"limit": 0}).status_code == 422
+        # ?min_size= as for /largest: here only the zip holds more than 1 byte.
+        assert [h["path"] for h in c.get(f"/roots/{rid}/newest", params={"min_size": 2}).json()] == [str(zf)]
+        assert c.get(f"/roots/{rid}/newest", params={"min_size": "big"}).status_code == 422
 
 def test_failed_jobs_can_be_queued_again(conn, tmp_path):
     write(tmp_path / "good.txt", "fine")

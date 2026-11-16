@@ -126,8 +126,10 @@ export function formatSize(bytes: number): string {
 }
 
 // The query string of GET /roots/{id}/largest and /newest: how many files, as typed (empty
-// means the API's 10), and the endings as the search form takes them.
-export function largestParams(limit: string, ext: string): URLSearchParams {
+// means the API's 10), the endings as the search form takes them, and the smallest size in
+// whole MB (empty or 0 means every size), sent as bytes with 1 MB as 1024 * 1024 bytes, as
+// formatSize counts it.
+export function largestParams(limit: string, ext: string, minMb = ""): URLSearchParams {
   const p = new URLSearchParams();
   const t = limit.trim();
   if (t !== "") {
@@ -137,6 +139,13 @@ export function largestParams(limit: string, ext: string): URLSearchParams {
     p.set("limit", String(Number(t)));
   }
   for (const e of splitExts(ext)) p.append("ext", e);
+  const m = minMb.trim();
+  if (m !== "") {
+    if (!/^\d+$/.test(m) || !Number.isSafeInteger(Number(m) * 1024 * 1024)) {
+      throw new FormError("Smallest size must be a whole number of MB, 0 or more.");
+    }
+    if (Number(m) > 0) p.set("min_size", String(Number(m) * 1024 * 1024));
+  }
   return p;
 }
 

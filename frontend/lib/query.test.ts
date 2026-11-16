@@ -149,4 +149,17 @@ describe("largestParams", () => {
     }
     expect(largestParams("1000", "").get("limit")).toBe("1000");
   });
+
+  it("sends the smallest size in bytes, and nothing for 0 or empty", () => {
+    expect(largestParams("", "", "100").toString()).toBe("min_size=104857600");
+    expect(largestParams("5", "mp4", " 1 ").toString()).toBe("limit=5&ext=mp4&min_size=1048576");
+    expect(largestParams("", "", "0").toString()).toBe("");
+    expect(largestParams("", "", " ").toString()).toBe("");
+  });
+
+  it("refuses a smallest size that is not a whole number of MB", () => {
+    for (const bad of ["-1", "1.5", "ten", "1e3", "9999999999999"]) {
+      expect(() => largestParams("", "", bad)).toThrow(FormError);
+    }
+  });
 });
