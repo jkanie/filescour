@@ -230,6 +230,35 @@ def test_newest_files_of_1_folder(conn, tmp_path):
         assert [h["path"] for h in c.get(f"/roots/{rid}/newest", params={"min_size": 2}).json()] == [str(zf)]
         assert c.get(f"/roots/{rid}/newest", params={"min_size": "big"}).status_code == 422
 
+def test_failed_jobs_of_1_folder(conn, tmp_path):
+    for name in ("a", "b"):
+        write(tmp_path / name / "good.txt", "fine")
+        (tmp_path / name / "bad.txt").write_bytes(b"caf\xe9")
+    with client() as c:
+        a = c.post("/roots", json={"path": str(tmp_path / "a")}).json()["id"]
+        b = c.post("/roots", json={"path": str(tmp_path / "b")}).json()["id"]
+        for r in (a, b):
+            c.post(f"/roots/{r}/scan")
+        assert c.post("/jobs/run").json()["processed"] == 4
+        assert len(c.get("/jobs/failed").json()) == 2
+        # ?root= keeps 1 folder's failed jobs, and the limit still applies.
+        assert [f["path"] for f in c.get("/jobs/failed", params={"root": b}).json()] == [str(tmp_path / "b" / "bad.txt")]
+        assert c.get("/jobs/failed", params={"root": a, "limit": 1}).json()[0]["path"] == str(tmp_path / "a" / "bad.txt")
+        # Retrying 1 folder leaves the other's failed job as it was.
+        write(tmp_path / "a" / "bad.txt", "café")
+        assert c.post("/jobs/failed/retry", params={"root": a}).json() == {"requeued": 1}
+        assert c.get("/jobs", params={"root": a}).json()["failed"] == 0
+        assert c.get("/jobs", params={"root": b}).json()["failed"] == 1
+        assert c.post("/jobs/failed/retry", params={"root": a}).json() == {"requeued": 0}
+        assert [f["path"] for f in c.get("/jobs/failed").json()] == [str(tmp_path / "b" / "bad.txt")]
+        missing = max(a, b) + 1
+        for r in (c.get("/jobs/failed", params={"root": missing}), c.post("/jobs/failed/retry", params={"root": missing})):
+            assert r.status_code == 404
+            assert r.json()["detail"] == f"no folder with id {missing}"
+        assert c.get("/jobs/failed", params={"root": "x"}).status_code == 422
+        assert c.get("/jobs", params={"root": b}).json()["failed"] == 1
+
+
 def test_failed_jobs_can_be_queued_again(conn, tmp_path):
     write(tmp_path / "good.txt", "fine")
     (tmp_path / "bad.txt").write_bytes(b"caf\xe9")

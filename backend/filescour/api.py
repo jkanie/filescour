@@ -203,22 +203,35 @@ def scan(root_id: int, conn=Depends(get_conn)):
     return result.__dict__
 
 
-@app.get("/jobs")
-def job_summary(root: int | None = Query(default=None), conn=Depends(get_conn)):
-    # With ?root=ID, only the jobs of that folder's files. An id with no folder gives 404, as GET /roots/{id} does.
+def _check_root(conn, root):
+    # ?root=ID of the /jobs endpoints: an id with no folder gives 404, as GET /roots/{id} does.
     if root is not None and conn.execute("SELECT 1 FROM roots WHERE id = %s", (root,)).fetchone() is None:
         raise HTTPException(status_code=404, detail=f"no folder with id {root}")
+
+
+@app.get("/jobs")
+def job_summary(root: int | None = Query(default=None), conn=Depends(get_conn)):
+    # With ?root=ID, only the jobs of that folder's files.
+    _check_root(conn, root)
     return jobs.summary(conn, root)
 
 
 @app.get("/jobs/failed")
-def failed_jobs(limit: int = Query(default=100, ge=1, le=1000), conn=Depends(get_conn)):
-    return jobs.failed(conn, limit)
+def failed_jobs(
+    limit: int = Query(default=100, ge=1, le=1000),
+    root: int | None = Query(default=None),
+    conn=Depends(get_conn),
+):
+    # ?root=ID lists only the failed jobs of that folder's files, as for GET /jobs.
+    _check_root(conn, root)
+    return jobs.failed(conn, limit, root)
 
 
 @app.post("/jobs/failed/retry")
-def retry_failed_jobs(conn=Depends(get_conn)):
-    return {"requeued": jobs.retry_failed(conn)}
+def retry_failed_jobs(root: int | None = Query(default=None), conn=Depends(get_conn)):
+    # ?root=ID queues again only the failed jobs of that folder's files, such as after fixing the files of 1 folder.
+    _check_root(conn, root)
+    return {"requeued": jobs.retry_failed(conn, root)}
 
 
 @app.post("/jobs/run")

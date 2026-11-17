@@ -183,12 +183,14 @@ def _work(conn: psycopg.Connection, limit: int | None) -> int:
     return count
 
 
-def failed(conn: psycopg.Connection, limit: int = 100) -> list[dict]:
-    """The failed jobs, the most recent 1st, each with its file's path and the reason kept in its error column."""
+def failed(conn: psycopg.Connection, limit: int = 100, root_id: int | None = None) -> list[dict]:
+    """The failed jobs, the most recent 1st, each with its file's path and the reason kept in its error column. With
+    root_id, only the jobs of that folder's files."""
     rows = conn.execute(
         "SELECT j.id, f.path, j.error, j.attempts, j.updated_at FROM jobs j JOIN files f ON f.id = j.file_id"
-        " WHERE j.state = 'failed' ORDER BY j.updated_at DESC, j.id DESC LIMIT %s",
-        (limit,),
+        " WHERE j.state = 'failed' AND (%s::bigint IS NULL OR f.root_id = %s)"
+        " ORDER BY j.updated_at DESC, j.id DESC LIMIT %s",
+        (root_id, root_id, limit),
     ).fetchall()
     return [
         {"id": i, "path": path, "error": error, "attempts": attempts, "updated_at": at.isoformat()}
@@ -196,13 +198,15 @@ def failed(conn: psycopg.Connection, limit: int = 100) -> list[dict]:
     ]
 
 
-def retry_failed(conn: psycopg.Connection) -> int:
+def retry_failed(conn: psycopg.Connection, root_id: int | None = None) -> int:
     """Puts every failed job back in the queue with its attempts at 0 and its error cleared, such as after the files
-    are fixed. Returns how many."""
+    are fixed. With root_id, only the jobs of that folder's files. Returns how many."""
     with conn.transaction():
         rows = conn.execute(
             "UPDATE jobs SET state = 'queued', attempts = 0, error = NULL, updated_at = now()"
-            " WHERE state = 'failed' RETURNING id"
+            " WHERE state = 'failed' AND (%s::bigint IS NULL OR file_id IN (SELECT id FROM files WHERE root_id = %s))"
+            " RETURNING id",
+            (root_id, root_id),
         ).fetchall()
     return len(rows)
 
